@@ -1,0 +1,566 @@
+---
+title: "F3_LT50"
+output: html_document
+date: "2023-04-29"
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_knit$set(root.dir = 
+                        '~/Documents/GitHub/HotOnes_Tigriopus/Comm_Gard_LT50/')
+
+library(tidyverse)
+library(drc)
+library(plyr)
+library(MASS)
+library(ggpubr)
+library(brms)
+library(rstantools)
+library(sjPlot)
+
+```
+
+```{r}
+
+# Read in Aug 21 and Feb 22 common garden F3 LT50 data
+Aug21_F3_LT50_df <- read.csv("Aug21_F3_LT50.csv")
+Feb_F3_expanded_df <- read.csv("Feb_F3_expanded_df.csv")
+
+# Wrangle Feb data to match August
+Feb22_F3_LT50_df <- data.frame(Date = "Filler",
+                               Row = "Filler",
+                               Column = "Filler",
+                               Temp = Feb_F3_expanded_df$Temp,
+                               Pop = gsub("\\d.*", "", Feb_F3_expanded_df$Sib_ID),
+                               Pool = gsub("-[^0-9].*", "", Feb_F3_expanded_df$Sib_ID),
+                               Sibship = gsub(".$", "", Feb_F3_expanded_df$Sib_ID),
+                               Treatment = ifelse(
+                                gsub(".*(.{1})", "\\1", Feb_F3_expanded_df$Sib_ID) 
+                                =="H", 21.55, 16.42),
+                               Sex = Feb_F3_expanded_df$Sex,
+                               Survival = Feb_F3_expanded_df$Survival,
+                               Season = "Feb")
+
+Aug21_F3_LT50_df$Season <- "Aug"
+
+All_F3_LT50_df <- rbind(Aug21_F3_LT50_df,
+                        Feb22_F3_LT50_df)
+
+All_F3_LT50_df$Sibship <- paste(All_F3_LT50_df$Season,
+                                All_F3_LT50_df$Sibship,
+                                sep = "_")
+
+All_F3_LT50_df$Sex <- gsub("N", "M", All_F3_LT50_df$Sex)
+
+All_F3_LT50_df$Pop <- gsub("RM", "RMR", 
+                                 gsub("RMR", "RM", 
+                                      All_F3_LT50_df$Pop))
+
+# Create latitude index
+lat_index <- data.frame(Pop = c("BMR", "SC", "RMR", "PTD"),
+                        Lat = c(38.316375,
+                                  36.965681,
+                                  35.540147,
+                                  34.002089))
+
+```
+
+```{r}
+
+## Fit logistic regression to each sex x lat group
+# Create sex_pop variable
+All_F3_LT50_df$Sex_Pop_Treat <- paste(All_F3_LT50_df$Sex,
+                                  All_F3_LT50_df$Pop,
+                                  All_F3_LT50_df$Treatment,
+                                  sep = "_")
+
+# Fit ll.2 drc's
+BMR_F_21.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "F_BMR_21.55"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+BMR_M_21.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "M_BMR_21.55"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+BMR_F_16.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "F_BMR_16.42"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+BMR_M_16.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "M_BMR_16.42"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+SC_F_21.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "F_SC_21.55"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+SC_M_21.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "M_SC_21.55"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+SC_F_16.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "F_SC_16.42"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+SC_M_16.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "M_SC_16.42"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+RMR_F_21.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "F_RMR_21.55"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+RMR_M_21.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "M_RMR_21.55"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+RMR_F_16.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "F_RMR_16.42"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+RMR_M_16.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "M_RMR_16.42"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+PTD_F_21.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "F_PTD_21.55"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+PTD_M_21.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "M_PTD_21.55"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+PTD_F_16.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "F_PTD_16.42"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+PTD_M_16.5_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Treat == "M_PTD_16.42"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+```
+
+```{r}
+
+# Export LT50 values
+BMRF21.5_LT50 <-as.data.frame(ED(BMR_F_21.5_All_LL2, 50))
+BMRM21.5_LT50 <-as.data.frame(ED(BMR_M_21.5_All_LL2, 50))
+BMRF16.5_LT50 <-as.data.frame(ED(BMR_F_16.5_All_LL2, 50))
+BMRM16.5_LT50 <-as.data.frame(ED(BMR_M_16.5_All_LL2, 50))
+
+SCF21.5_LT50 <-as.data.frame(ED(SC_F_21.5_All_LL2, 50))
+SCM21.5_LT50 <-as.data.frame(ED(SC_M_21.5_All_LL2, 50))
+SCF16.5_LT50 <-as.data.frame(ED(SC_F_16.5_All_LL2, 50))
+SCM16.5_LT50 <-as.data.frame(ED(SC_M_16.5_All_LL2, 50))
+
+RMRF21.5_LT50 <-as.data.frame(ED(RMR_F_21.5_All_LL2, 50))
+RMRM21.5_LT50 <-as.data.frame(ED(RMR_M_21.5_All_LL2, 50))
+RMRF16.5_LT50 <-as.data.frame(ED(RMR_F_16.5_All_LL2, 50))
+RMRM16.5_LT50 <-as.data.frame(ED(RMR_M_16.5_All_LL2, 50))
+
+PTDF21.5_LT50 <-as.data.frame(ED(PTD_F_21.5_All_LL2, 50))
+PTDM21.5_LT50 <-as.data.frame(ED(PTD_M_21.5_All_LL2, 50))
+PTDF16.5_LT50 <-as.data.frame(ED(PTD_F_16.5_All_LL2, 50))
+PTDM16.5_LT50 <-as.data.frame(ED(PTD_M_16.5_All_LL2, 50))
+
+# Combine LT50 estimates into single dataframe
+All_LL2_LT50_est <- data.frame(Pop = c("BMR", "BMR", "BMR", "BMR",
+                                       "SC", "SC", "SC", "SC",
+                                       "RMR", "RMR", "RMR", "RMR",
+                                       "PTD", "PTD", "PTD", "PTD"),
+                               Sex = c("F", "M", "F", "M",
+                                       "F", "M", "F", "M",
+                                       "F", "M", "F", "M",
+                                       "F", "M", "F", "M"),
+                               Temp = c(21.55, 21.55, 16.42, 16.42,
+                                        21.55, 21.55, 16.42, 16.42,
+                                        21.55, 21.55, 16.42, 16.42,
+                                        21.55, 21.55, 16.42, 16.42),
+LT50 = c(BMRF21.5_LT50$Estimate, BMRM21.5_LT50$Estimate,
+         BMRF16.5_LT50$Estimate, BMRM16.5_LT50$Estimate,
+         SCF21.5_LT50$Estimate, SCM21.5_LT50$Estimate,
+         SCF16.5_LT50$Estimate, SCM16.5_LT50$Estimate,
+         RMRF21.5_LT50$Estimate, RMRM21.5_LT50$Estimate,
+         RMRF16.5_LT50$Estimate, RMRM16.5_LT50$Estimate,
+         PTDF21.5_LT50$Estimate, PTDM21.5_LT50$Estimate,
+         PTDF16.5_LT50$Estimate, PTDM16.5_LT50$Estimate),
+SE = c(BMRF21.5_LT50$`Std. Error`, BMRM21.5_LT50$`Std. Error`,
+         BMRF16.5_LT50$`Std. Error`, BMRM16.5_LT50$`Std. Error`,
+         SCF21.5_LT50$`Std. Error`, SCM21.5_LT50$`Std. Error`,
+         SCF16.5_LT50$`Std. Error`, SCM16.5_LT50$`Std. Error`,
+         RMRF21.5_LT50$`Std. Error`, RMRM21.5_LT50$`Std. Error`,
+         RMRF16.5_LT50$`Std. Error`, RMRM16.5_LT50$`Std. Error`,
+         PTDF21.5_LT50$`Std. Error`, PTDM21.5_LT50$`Std. Error`,
+         PTDF16.5_LT50$`Std. Error`, PTDM16.5_LT50$`Std. Error`))
+
+```
+
+```{r}
+
+# Merge latitude with LT50 estimates
+All_LL2_LT50_est <- merge(All_LL2_LT50_est,
+                          lat_index,
+                          by = "Pop")
+
+# Order site names
+All_LL2_LT50_est$Pop = factor(
+  All_LL2_LT50_est$Pop, 
+  levels = c('BMR', 'SC', 'RMR', 'PTD'))
+
+# Plot LT50 estimates by sex, temp, lat
+Fig4A <- ggplot(data = filter(All_LL2_LT50_est, Sex == "F" | Sex == "M"),
+       aes(x = Temp, y = LT50, color = -Lat,
+           group = Sex, lty = Sex, shape = Sex)) +
+  geom_line(size = .75) +
+  geom_errorbar(aes(ymin = LT50 - SE,
+                    ymax = LT50 + SE),
+                width = 0, lty = 1, size = .75) +
+  geom_point(size = 3) +
+  theme_classic(base_rect_size = 0, base_size = 20) +
+  theme() +
+  scale_x_continuous(breaks = c(17,19,21)) +
+  scale_color_viridis_c(guide = "none") +
+  facet_grid(.~Pop) +
+  labs(x = "Temperature (°C)", y = expression("LT"[50]*" (°C)"))
+
+Fig4A
+
+#What is the rate of change in LT50 per degree N latitude?
+summary(lm(LT50 ~ Lat, data = All_LL2_LT50_est))
+
+#How much more thermally tolerant are females than males?
+summary(lm(LT50 ~ Sex, data = All_LL2_LT50_est))
+
+```
+
+```{r}
+
+All_F3_LT50_df$Sib_ID <- paste(All_F3_LT50_df$Sibship,
+                               All_F3_LT50_df$Treatment,
+                               sep ="_")
+
+All_F3_LT50_df <- merge(All_F3_LT50_df,
+                        lat_index,
+                        by = "Pop")
+
+all_glmer <- lme4::glmer(Survival ~ Temp + Lat:Temp + Sex:Temp + 
+                           Treatment:Temp +
+                           Lat:Treatment:Temp + (1|Sib_ID),
+                   family = binomial(link="logit"),
+                   data = All_F3_LT50_df)
+
+All_F3_LT50_df$Sex <- ifelse(All_F3_LT50_df$Sex == "M", "F", 
+                               ifelse(All_F3_LT50_df$Sex == "U", "F", "F"))
+
+All_F3_LT50_pred <- fitted(all_glmer, newdata = All_F3_LT50_df) %>%
+  as_tibble() %>%
+  bind_cols(All_F3_LT50_df)
+
+# With for loop, fit drc ll.2 model to each sibship
+All_21_F3_LT50_hi <- filter(All_F3_LT50_pred, Treatment == 21.55)
+All_21_F3_LT50_lo <- filter(All_F3_LT50_pred, Treatment == 16.42)
+
+# Loop drc models for hi and low temperatures
+drcs_hi <- dlply(All_21_F3_LT50_hi, c("Sibship"), function(df) 
+glm(value ~ Temp, family = quasibinomial("logit"), 
+    data = df))
+
+drcs_lo <- dlply(All_21_F3_LT50_lo, c("Sibship"), function(df) 
+glm(value ~ Temp, family = quasibinomial("logit"), 
+    data = df))
+
+## Compile lo and hi drcs into single df
+# Hi
+hi_dosep_ls <- list()
+
+for (i in 1:length(drcs_hi)) {
+ hi_dosep_ls[[i]] <- as.data.frame(
+   unname(dose.p(drcs_hi[[i]], cf = 1:2, p = 0.5)[1:1]))
+}
+
+names(hi_dosep_ls) <- names(drcs_hi)
+
+hi_coef_df <- bind_rows(hi_dosep_ls, .id = "column_label")
+
+# Lo
+lo_dosep_ls <- list()
+
+for (i in 1:length(drcs_lo)) {
+ lo_dosep_ls[[i]] <- as.data.frame(
+   unname(dose.p(drcs_lo[[i]], cf = 1:2, p = 0.5)[1:1]))
+}
+
+names(lo_dosep_ls) <- names(drcs_lo)
+
+lo_coef_df <- bind_rows(lo_dosep_ls, .id = "column_label")
+
+# Compile full data frame
+sibship_LT50_df <- merge(
+  data.frame(Sibship = hi_coef_df$column_label,
+             LT50_hi = hi_coef_df$`unname(dose.p(drcs_hi[[i]], cf = 1:2, p = 0.5)[1:1])`),
+  data.frame(Sibship = lo_coef_df$column_label,
+             LT50_lo = lo_coef_df$`unname(dose.p(drcs_lo[[i]], cf = 1:2, p = 0.5)[1:1])`),
+  by = "Sibship")
+
+# Create Q10 variable
+sibship_LT50_df$Q10 <- ((sibship_LT50_df$LT50_hi - sibship_LT50_df$LT50_lo) / 
+                          (21.55 - 16.4)) * 10
+
+# Filter out outlier Q10 
+sibship_LT50_filt <- filter(sibship_LT50_df, 
+                            Sibship != c("Aug_BMR5-B4B", "Feb_BMR6-A1"))
+sibship_LT50_filt$Pop <- gsub(".*_", "", gsub(".-.*", "", sibship_LT50_filt$Sibship))
+sibship_LT50_filt$Pop <- gsub("RMRR", "RMR", gsub("RM", "RMR", sibship_LT50_filt$Pop))
+sibship_LT50_filt <- merge(sibship_LT50_filt,
+                           lat_index,
+                           by = "Pop")
+
+```
+
+```{r}
+
+# Model adjusted plasticity ~ tolerance tradeoff
+sibship_LT50_filt2 <- filter(sibship_LT50_filt, is.na(LT50_lo) == FALSE)
+sibship_LT50_filt2$LT50_int_sq <- sibship_LT50_filt2$LT50_lo^2
+
+sibship_LT50_filt2$LT50_int_orth <- sibship_LT50_filt2$LT50_lo - 
+  mean(sibship_LT50_filt2$LT50_int_sq) *
+  sibship_LT50_filt2$LT50_int_sq
+
+# Adjust transform plasticity measures to control regression to the mean
+rttm.adj<-function(m1, m2){
+raw.plast<-m2-m1
+vart<-var.test(m1,m2,paired = T) ## variances equal?
+vpv<-vart$p.value # var.test p value
+m1m2cor<-cor.test(m1, m2) # test correlation between m1 and m2
+rho<-m1m2cor$estimate # correlation coefficient between m1 and m2
+m1sd<-sd(m1) # m1 sd
+m2sd<-sd(m2) # m2 sd
+m1v<-var(m1) # m1 var
+m2v<-var(m2) # m2 var
+m1m<-mean(m1) # m1 mean
+m2m<-mean(m2) # m2 mean
+pm<-mean(raw.plast)
+rho2<-(2*rho*m1sd*m2sd)/(m1v+m2v) # adjusted correlation coefficient used if variances are equal
+rhof<-ifelse(vpv <= 0.05, rho, rho2) # which rho is used for dstar calculation is based on variance comparison
+dstar<-(rhof*(m1-m1m)-(m2-m2m))*-1 # adjustment values. Multiply by -1 to flip sign because Kelly and Price based on plasticity as m1-m2, not m2-m1 as in most thermal tolerance estimates
+adj.plast <- pm+dstar # corrected plasticity.
+out<-as.data.frame(cbind(raw.plast, dstar, adj.plast))
+return(out)
+}
+
+adj_df <- rttm.adj(sibship_LT50_filt2$LT50_lo, sibship_LT50_filt2$LT50_hi)
+sibship_LT50_filt2 <- cbind(sibship_LT50_filt2, adj_df)
+
+# Estimate impact of non-independence and regression-to-mean controls on 
+# effect estimates
+raw_brm <- brm(raw.plast ~ LT50_lo + (1|Pop),
+              data = sibship_LT50_filt2,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+adj_brm <- brm(adj.plast ~ LT50_lo + (1|Pop),
+              data = sibship_LT50_filt2,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+intorth_brm <- brm(raw.plast ~ LT50_int_orth + (1|Pop),
+              data = sibship_LT50_filt2,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+sibship_LT50_filt2$sc_adj <- scale(sibship_LT50_filt2$adj.plast)
+sibship_LT50_filt2$sc_orth <- scale(sibship_LT50_filt2$LT50_int_orth)
+
+
+adj_intorth_brm <- brm(scaledadj.plast ~ LT50_int_orth + (1|Pop),
+              data = sibship_LT50_filt2,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+plot(adj_intorth_brm)
+
+posterior_summary(raw_brm)
+posterior_summary(adj_brm)
+posterior_summary(intorth_brm)
+posterior_summary(adj_intorth_brm)
+
+# Reduction in LT50 int's effect on plasticity after controlling against regression to the mean
+(1-(3.842827e-06/7.386845e-06)) * 100
+
+# Effect on variance explained by baseline LT50 after orthogonal polynomial transformation
+
+marginal_effects <- marginal_effects(adj_intorth_brm)
+
+total_var <- var(fitted(adj_intorth_brm)[,1])
+var_explained <- var(marginal_effects$LT50_int_orth$estimate__) / 
+  total_var
+
+marginal_effects_null <- marginal_effects(adj_brm)
+
+total_var_null <- var(fitted(adj_brm)[,1])
+var_explained_null <- var(marginal_effects_null$LT50_lo$estimate__) / 
+  total_var_null
+
+(1-(var_explained/var_explained_null)) * 100
+
+sibship_LT50_filt2$Season <- gsub("_.*", "", sibship_LT50_filt2$Sibship)
+sibship_LT50_filt2$Pool <- gsub("-.*", "", sibship_LT50_filt2$Sibship)
+
+adj_intorth_brm <- brm(sc_adj ~ sc_orth + I(sc_orth^2) + (1|Pop/Season/Pool),
+              data = sibship_LT50_filt2,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+as.data.frame(posterior_summary(adj_intorth_brm))
+
+# Plot adjusted values
+adj_plot_df <- cbind(sibship_LT50_filt2,fitted(adj_brm)[,1])
+
+adj_plot_df$Pop = factor(
+  adj_plot_df$Pop, 
+  levels = c('BMR', 'SC', 'RMR', 'PTD'))
+
+ggplot(data = adj_plot_df,
+       aes(x = LT50_lo, color = -Lat, group = Pop)) +
+  geom_point(aes(y = adj.plast), alpha = 0.5) +
+  geom_smooth(aes(y = `fitted(adj_brm)[, 1]`), 
+              method = "lm", lty = 2) +
+  geom_smooth(aes(y = raw.plast), 
+              method = "lm", se = FALSE) +
+  scale_color_viridis_c(guide = "none") +
+  facet_grid(.~Pop) +
+  theme_classic(base_rect_size = 0) +
+  labs(x = "Baseline LT50", y = "Adjusted plasticity")
+
+# Export per-sibship Q10 and LT50_int
+write.csv(sibship_LT50_filt2, "sibship_LT50_filt2.csv")
+
+# Calculate mean number of larvae per culture
+All_F3_LT50_df$Sib_ID <- paste(All_F3_LT50_df$Sibship,
+                               All_F3_LT50_df$Treatment,
+                               sep = "_")
+
+n_per_sib <- as.data.frame(table(All_F3_LT50_df$Sib_ID))
+n_per_sib_sum <- summarySE(measurevar = "Freq",
+                           groupvars = c(),
+                           data = n_per_sib)
+n_per_sib_sum
+
+# Plot pl ~ LT50_int tradeoff
+sibship_LT50_filt2$Q10_adj <- (sibship_LT50_filt2$adj.plast/5.13)*10
+
+Fig4B <- ggplot(data = sibship_LT50_filt,
+                aes(x = LT50_lo, color = -Lat)) +
+  geom_point(size = 2, aes(y = Q10)) +
+  geom_smooth(data = sibship_LT50_filt2,
+              aes(y = Q10_adj, group = Pop), method = "lm", 
+              size = 0.75, se = FALSE, fullrange = FALSE) +
+  geom_smooth(aes(y = Q10), method = "lm", size = 0.75, lty = 0, 
+              color = "black") +
+  theme_classic(base_size = 20) +
+  scale_color_viridis_c(guide = "none") +
+  labs(x = expression("Baseline LT"[50]*" (°C)"), 
+       y = expression("Q"[10]*" (LT"[50]*")"))
+  
+Fig4B
+
+# Export Fig. 4
+Fig_4 <- ggarrange(Fig4A, Fig4B, 
+                   labels = c("A", "B"),
+                   heights = c(1, 1),
+                   ncol = 1, nrow = 2, align = "hv")
+
+Fig_4
+
+# Export Fig 4 as png
+png("~/Documents/GitHub/HotOnes_Tigriopus/Figures/Fig_4.png", units = "in", width = 7, 
+     height = 12, 
+    res = 600)
+
+Fig_4
+
+```
+
+```{r}
+
+# Model quality check on plasticity ~ tolerance LMM
+Fig_S5A <- pp_check(adj_intorth_brm)
+Fig_S5A
+
+Fig_S5B <- plot(loo(adj_intorth_brm))
+Fig_S5B
+
+plot(adj_intorth_brm)
+
+```
+

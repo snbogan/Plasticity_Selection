@@ -1,0 +1,107 @@
+---
+title: "nls_LT50"
+output: html_document
+date: "2023-05-23"
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_knit$set(root.dir = '~/Documents/GitHub/HotOnes_Tigriopus/Comm_Gard_LT50/')
+
+library(tidyverse)
+library(nlme)
+
+```
+
+Example of non-linear logistic regression using simulated data
+
+```{r}
+
+# Load required libraries
+library(ggplot2)
+
+# Generate sample data
+set.seed(123)
+x <- seq(-5, 5, by = 0.1)
+y <- 1 / (1 + exp(-2 * (x - 2))) + rnorm(length(x), mean = 0, sd = 0.1)
+x_cont <- rnorm
+
+# Plot the data
+ggplot(data = data.frame(x, y), aes(x = x, y = y)) +
+  geom_point() +
+  labs(x = "x", y = "y") +
+  ggtitle("Non-linear Logistic Regression")
+
+# Define the logistic function
+logistic <- function(x, a, b, c, d) {
+  a + b / (1 + exp(-c * (x - d)))
+}
+
+# Fit the non-linear logistic regression model
+fit <- nls(y ~ logistic(x, a, b, c, d), start = list(a = 0, b = 1, c = 1, d = 1))
+
+# Extract the parameter estimates
+a_hat <- coef(fit)["a"]
+b_hat <- coef(fit)["b"]
+c_hat <- coef(fit)["c"]
+d_hat <- coef(fit)["d"]
+
+# Print the parameter estimates
+cat("Estimated parameters:\n")
+cat("a:", a_hat, "\n")
+cat("b:", b_hat, "\n")
+cat("c:", c_hat, "\n")
+cat("d:", d_hat, "\n")
+
+# Plot the fitted curve
+curve(logistic(x, a_hat, b_hat, c_hat, d_hat), from = min(x), to = max(x), add = TRUE, col = "red")
+
+```
+
+```{r}
+
+# Read in Aug 21 and Feb 22 common garden F3 LT50 data
+Aug21_F3_LT50_df <- read.csv("Aug21_F3_LT50.csv")
+Feb_F3_expanded_df <- read.csv("Feb_F3_expanded_df.csv")
+
+# Wrangle Feb data to match August
+Feb22_F3_LT50_df <- data.frame(Date = "Filler",
+                               Row = "Filler",
+                               Column = "Filler",
+                               Temp = Feb_F3_expanded_df$Temp,
+                               Pop = gsub("\\d.*", "", Feb_F3_expanded_df$Sib_ID),
+                               Pool = gsub("-[^0-9].*", "", Feb_F3_expanded_df$Sib_ID),
+                               Sibship = gsub(".$", "", Feb_F3_expanded_df$Sib_ID),
+                               Treatment = ifelse(
+                                gsub(".*(.{1})", "\\1", Feb_F3_expanded_df$Sib_ID) 
+                                =="H", 21.55, 16.42),
+                               Sex = Feb_F3_expanded_df$Sex,
+                               Survival = Feb_F3_expanded_df$Survival,
+                               Season = "Feb")
+
+Aug21_F3_LT50_df$Season <- "Aug"
+
+All_F3_LT50_df <- rbind(Aug21_F3_LT50_df,
+                        Feb22_F3_LT50_df)
+
+All_F3_LT50_df$Sibship <- paste(All_F3_LT50_df$Season,
+                                All_F3_LT50_df$Sibship,
+                                sep = "_")
+
+# Create latitude index
+lat_index <- data.frame(Pop = c("BMR", "SC", "RMR", "PTD"),
+                        Lat = c(38.316375,
+                                  36.965681,
+                                  35.540147,
+                                  34.002089))
+
+nlme(Survival ~ SSlogis(Temp, Asym, xmid, scal),
+                fixed=list(xmid ~ Treatment + Sex + Pop + Pop:Treatment, scal ~ 1),
+                random = xmid ~ (1 | Pop/Season/Pool/Sibship),
+                start=list(fixed=c(Asym=c(150,200,250,300),xmid=c(10,10,10,10),scal=4)),
+                data=All_F3_LT50_df)
+
+
+
+```
+

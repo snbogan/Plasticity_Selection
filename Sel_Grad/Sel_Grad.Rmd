@@ -1,0 +1,1034 @@
+---
+title: "Sel_Grad"
+output: html_notebook
+---
+
+R markdown notebook for fitting multivariate selection gradient to thermal tolerance and its plasticity in *T. californicus*.
+
+```{r}
+# Set working directory
+knitr::opts_knit$set(root.dir = '~/Documents/GitHub/HotOnes/Sel_Grad')
+
+# Load dependencies
+library(tidyverse)
+library(Rmisc)
+library(brms)
+library(bayestestR)
+library(bayesplot)
+library(ggpubr)
+library(mediation)
+
+```
+
+Read in and wrangle fecundity, body size, tol, and pl df
+
+```{r}
+
+# Create latitude index
+lat_index <- data.frame(Pop = c("BMR", "SC", "RMR", "PTD"),
+                        Lat = c(38.316375,
+                                  36.965681,
+                                  35.540147,
+                                  34.002089))
+
+# Read in df
+Aug_meta_df <- read.csv("Aug_F3_Fecundity.csv")
+Feb_meta_df <- read.csv("Feb_F3_Fecundity.csv")
+Feb_meta_df$Sib_ID <- gsub("^(.*?)_(.*?)_(.*)$", "\\1_\\2\\3", 
+                           Feb_meta_df$Sib_ID)
+
+fec_meta_df <- rbind(Aug_meta_df,
+                     Feb_meta_df)
+
+fec_meta_df$Sibship <- paste(fec_meta_df$Season,
+                            fec_meta_df$Sibship,
+                            sep = "_")
+
+sibship_LT50_filt <- read.csv(
+  "~/Documents/GitHub/HotOnes_Tigriopus/Comm_Gard_LT50/sibship_LT50_filt2.csv")
+
+sibship_LT50_filt$Sibship <- gsub("-", "_", sibship_LT50_filt$Sibship)
+
+# Create hi temp and lo temp LT50 df's
+lo_LT50_df <- data.frame(Sib_ID = paste(sibship_LT50_filt$Sibship, "L"),
+                         LT50 = sibship_LT50_filt$LT50_lo)
+
+lo_LT50_df$Sib_ID <- gsub(" ", "", lo_LT50_df$Sib_ID)
+
+hi_LT50_df <- data.frame(Sib_ID = paste(sibship_LT50_filt$Sibship, "H"),
+                         LT50 = sibship_LT50_filt$LT50_hi)
+
+hi_LT50_df$Sib_ID <- gsub(" ", "", hi_LT50_df$Sib_ID)
+
+LT50_df <- rbind(lo_LT50_df,
+                 hi_LT50_df)
+
+#fec_meta_df <- filter(fec_meta_df, !Notes == "FLAGGED")
+
+# Calculate mean size and fecundity per sibship x temp group (Sib_ID)
+fec_meta_df$Lag <- as.numeric(fec_meta_df$Lag)
+
+lag_sum <- summarySE(measurevar = "Lag",
+                     groupvars = c("Sib_ID", "Pop", 
+                                   "Sibship", "Temp", "Season", "LT50_date"),
+                     data = fec_meta_df) 
+
+fec_sum <- summarySE(measurevar = "Egg_count",
+                     groupvars = c("Sib_ID", "Pop", 
+                                   "Sibship", "Temp", "Season", "LT50_date"),
+                     data = fec_meta_df)
+
+lag_sum$Sib_ID <- paste(lag_sum$Season,
+                        lag_sum$Sib_ID,
+                        sep = "_")
+
+lag_keep <- filter(lag_sum, Lag <= 7)
+
+# Add in baseline LT50 and Q10
+fec_sum <- merge(fec_sum,
+                 sibship_LT50_filt,
+                 by = "Sibship")
+
+# Add in low and high temp LT50
+fec_sum$Sib_ID <- paste(fec_sum$Season, fec_sum$Sib_ID, sep = "_")
+
+fec_sum <- merge(fec_sum,
+                 LT50_df,
+                 by = "Sib_ID",
+                 all.x = TRUE)
+
+# Merge summary df's
+sel_grad_df <- data.frame(Sib_ID = fec_sum$Sib_ID,
+             Pop = fec_sum$Pop.x,
+             Season = fec_sum$Season,
+             Sibship = fec_sum$Sibship,
+             Temp = fec_sum$Temp,
+             LT50_date = fec_sum$LT50_date,
+             LT50 = fec_sum$LT50,
+             LT50_lo = fec_sum$LT50_lo,
+             Q10 = fec_sum$Q10,
+             adjusted_pred = fec_sum$adj.plast,
+             Egg_count = fec_sum$Egg_count)
+
+```
+
+Fit selection gradient models
+
+```{r}
+
+# Scale variables
+sel_grad_df$Scaled_egg <- scale(sel_grad_df$Egg_count)
+sel_grad_df$Scaled_LT50 <- scale(sel_grad_df$LT50)
+sel_grad_df$Scaled_Q10 <- scale(sel_grad_df$Q10)
+sel_grad_df$Scaled_LT50_int <- scale(sel_grad_df$LT50_lo)
+sel_grad_df$Scaled_Temp <- scale(sel_grad_df$Temp)
+sel_grad_df$Scaled_Q10_trans <- scale(sel_grad_df$adjusted_pred)
+
+# Create pool variable
+sel_grad_df$Pool <- gsub("^(.*?)_(.*?)_(.*)$", "\\1_\\2", sel_grad_df$Sibship)
+
+# Filter against missing data
+sel_grad_df_filt <- sel_grad_df %>% filter_at(vars(LT50, LT50_lo, Q10),
+                                              all_vars(!is.na(.)))
+
+check_df <- filter(sel_grad_df_filt, Temp == 16.42)
+check_df$Diff <- check_df$LT50 - check_df$LT50_lo # RMR1_A1 and SC4_B2
+
+# Correct for non-independence between tolerance intercept and slope using 
+# orthogonal polynomials
+sel_grad_df_filt$LT50_int_sc_sq <- sel_grad_df_filt$Scaled_LT50_int^2
+
+sel_grad_df_filt$LT50_int_orth <- sel_grad_df_filt$Scaled_LT50_int - 
+  mean(sel_grad_df_filt$LT50_int_sc_sq) *
+  sel_grad_df_filt$LT50_int_sc_sq
+
+sel_grad_df_filt$LT50_int_orth_sc <- scale(sel_grad_df_filt$LT50_int_orth)
+
+# What does orthogonal polynomial transformation do?
+ggplot(data = sel_grad_df_filt,
+       aes(y = LT50_int_orth_sc, x = Scaled_LT50_int)) +
+  geom_smooth() +
+  geom_point()
+
+sel_grad_df_filt$Pool <- paste(sel_grad_df_filt$Season,
+                               sel_grad_df_filt$Pool,
+                               sep = "_")
+
+# brm multivariate selection gradient model
+bf1a <- bf(Scaled_egg ~ Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+                 (1|Pop/Season/Pool/Sibship))
+
+bf1b <- bf(Scaled_egg ~ (1|Pop/Season/Pool/Sibship))
+
+bf2a <- bf(Scaled_Q10_trans ~ LT50_int_orth_sc + I(LT50_int_orth_sc^2) + (1|Pop))
+
+bf2b <- bf(Scaled_Q10_trans ~ (1|Pop))
+
+sel_grad_df_filt <- filter(sel_grad_df_filt, Sib_ID %in% lag_keep$Sib_ID)
+#sel_grad_df_filt <- merge(sel_grad_df_filt,
+                             # data.frame(Sib_ID = lag_sum$Sib_ID,
+                                         #Lag = lag_sum$Lag),
+                              #by = "Sib_ID")
+
+#sel_grad_df_filt$Lag_scaled <- scale(as.numeric(sel_grad_df_filt$Lag))
+
+# How many Aug vs. Feb cultures?
+table(sel_grad_df_filt$Season)
+
+sel_grad_df_filt$Q10_2_sc <- scale(sel_grad_df_filt$Q10^2)
+
+brm0 <- brm(bf(Scaled_egg ~ Season + Temp + Scaled_LT50 + Scaled_Q10 +
+                   Temp:Scaled_LT50 + Temp:Scaled_Q10 +
+                   Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+                 (1|Pop/Season/Pool/Sibship)) + 
+                bf2a + set_rescor(FALSE),
+              data = sel_grad_df_filt,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm1.1 <- brm(bf1a + bf2a + set_rescor(FALSE),
+              data = sel_grad_df_filt,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm1.2 <- brm(bf1b + bf2a + set_rescor(FALSE),
+              data = sel_grad_df_filt,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm1.3 <- brm(bf1a + bf2b + set_rescor(FALSE),
+              data = sel_grad_df_filt,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm1.4 <- brm(bf1b + bf2b + set_rescor(FALSE),
+              data = sel_grad_df_filt,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+# Hypothesis model selection
+hyp_bf <- bayesfactor_models(brm1.1, brm1.2, brm1.3,
+                             denominator = brm1.4)
+
+hyp_bf
+
+# How many sibships was fitness measured in?
+as.data.frame(table(sel_grad_df_filt$Sibship))
+
+# Probability of direction test
+posterior_interval(
+  brm0,
+  prob = 0.95,
+  type = "central")
+
+plot(brm2.1alt)
+
+conditional_effects(brm2.1alt)
+
+pp_check(brm3.1, resp = "Scaledegg")
+
+mcmc_pairs(brm1.1)
+
+p_sel_grad_df_filt2 <- fitted(brm_len,
+                              newdata = sel_grad_w_age_len) %>%
+  as_tibble() %>%
+  bind_cols(sel_grad_w_age_len)
+
+p_sel_grad_df_filt2 <- merge(p_sel_grad_df_filt2,
+                                 lat_index,
+                                 by = "Pop")
+
+Fig5A <- ggplot(data = p_sel_grad_df_filt2,
+                 aes(group = as.factor(Temp), color = as.factor(Temp))) +
+  geom_point(aes(x = Scaled_LT50, y = Scaled_egg), size = 2) +
+  geom_smooth(aes(y = Estimate.Scaledegg, x = Scaled_LT50,
+                  fill = as.factor(Temp), color = as.factor(Temp)), method = "lm", 
+              fullrange = TRUE, size = 0.75) +
+  theme_classic(base_size = 20) +
+  scale_fill_discrete(direction = -1) +
+  scale_color_discrete(direction = -1) +
+  theme(legend.position = "none") +
+  labs(x = expression("Scaled LT"["50"]),
+       y = "Scaled mean clutch size")
+
+Fig5A
+
+Fig5B <- ggplot(data = p_sel_grad_df_filt2,
+                 aes(group = as.factor(Temp)) ) +
+  geom_point(aes(x = Scaled_Q10, y = Scaled_egg, color = as.factor(Temp)), size = 2) +
+  geom_smooth(aes(y = Estimate.Scaledegg, x = Scaled_Q10,
+                  fill = as.factor(Temp), color = as.factor(Temp)),
+              method = "lm",
+              fullrange = TRUE, size = 0.75) +
+  theme_classic(base_size = 20) +
+  scale_color_discrete(direction = -1, guide = "none") +
+  scale_fill_discrete(direction = -1) +
+  theme(legend.position = "right",
+        axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.y = element_blank()) +
+  labs(x = expression("Scaled Q"[10]), fill = "Temp (°C)")
+
+Fig5B
+
+# Fig 5C
+p_sel_grad_df_filt2 <- p_sel_grad_df_filt2 %>%
+    mutate(quantile = ntile(Scaled_LT50_int, 3))
+
+p_sel_grad_df_filt2$quantile <- ifelse(
+  p_sel_grad_df_filt2$quantile == 1, "Low LT50",
+  ifelse(p_sel_grad_df_filt2$quantile == "2", "Mid LT50", "High LT50"))
+
+p_sel_grad_df_filt2$quantile = factor(
+  p_sel_grad_df_filt2$quantile,
+  levels=c('Low LT50','Mid LT50','High LT50'))
+
+Fig5C <- ggplot(data = p_sel_grad_df_filt2,
+                 aes(x = Scaled_Q10, group = as.factor(Temp),
+                     color = as.factor(Temp))) +
+  geom_point(aes(y = Scaled_egg), size = 2) +
+  geom_smooth(aes(y = Estimate.Scaledegg, fill = as.factor(Temp), 
+                  color = as.factor(Temp)),
+              method = "lm", fullrange = TRUE, 
+              size = 0.75, se = TRUE) +
+  theme_classic(base_rect_size = 0, base_size = 20) +
+  theme(legend.position = "none") +
+  scale_color_discrete(direction = -1) +
+  scale_fill_discrete(direction = -1) +
+  facet_grid(~quantile) +
+  labs(x = expression("Scaled Q"[10]), y = "Scaled mean clutch size")
+
+Fig5C
+
+# Export Fig. 5
+Fig_5_r1 <- ggarrange(Fig5A, Fig5B, 
+                   labels = c("A", ""),
+                   widths = c(0.85, 1.15),
+                   ncol = 2, nrow = 1, align = "hv")
+
+Fig_5_r1
+
+Fig_5 <- ggarrange(Fig_5_r1, Fig5C, 
+                   labels = c("", "B"),
+                   heights = c(1, 1.15),
+                   ncol = 1, nrow = 2, align = "hv")
+
+Fig_5
+
+# Export Fig 5 as png
+png("~/Documents/GitHub/HotOnes_Tigriopus/Figures/Fig_5.png", units = "in", width = 12, 
+    height = 12, 
+    res = 600)
+
+Fig_5
+
+bf_df2 <- data.frame(Model = c("Tradeoff + Limit", "Limit", "Tradeoff", "Null"),
+                    BF = c(11.37, 1.74, 6.74, 1))
+
+bf_df2$Model = factor(
+  bf_df2$Model,
+  levels=c("Tradeoff + Limit", "Tradeoff", "Limit",  "Null"))
+
+# Plot bf
+Fig6 <- ggplot(data = bf_df2,
+                 aes(x = BF, y = Model, color = Model, fill = Model)) +
+  geom_bar(stat = "identity", width = .025, color = "white") +
+  geom_point(size = 5) +
+  theme_classic(base_rect_size = 0, base_size = 20) +
+  theme(legend.position = "none") +
+  scale_color_manual(values = c("orange", "orange", "blue", "black")) +
+  scale_fill_manual(values = c("blue", "orange", "blue", "black")) +
+  labs(x = "Relative likelihood",
+       y = "Model")
+
+# Export Fig 6 as png
+Fig6
+
+png("~/Documents/GitHub/HotOnes_Tigriopus/Figures/Fig_6.png", units = "in", width = 7, 
+    height = 7, 
+    res = 600)
+
+Fig6
+
+#What was the selection gradient acting on plasticity in the top tercile of 
+#baseline tolerance?
+summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
+           data = filter(p_sel_grad_df_filt2, quantile == "High LT50" & 
+                           Temp == 16.42)))
+
+summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
+           data = filter(p_sel_grad_df_filt2, quantile == "Low LT50" & 
+                           Temp == 16.42)))
+
+summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
+           data = p_sel_grad_df_filt2))
+
+summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
+           data = filter(p_sel_grad_df_filt2, quantile == "High LT50")))
+
+summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
+           data = filter(p_sel_grad_df_filt2, quantile == "Low LT50")))
+
+#What was the low temp selection gradient on plasticity?
+summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
+           data = filter(p_sel_grad_df_filt2, 
+                           Temp == 16.42)))
+
+summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
+           data = filter(p_sel_grad_df_filt2, 
+                           Temp == 21.55)))
+
+#What was the low temp selection gradient on LT50?
+summary(lm(Estimate.Scaledegg ~ Scaled_LT50, 
+           data = filter(p_sel_grad_df_filt2, 
+                           Temp == 16.42)))
+
+# Tolerant low vs high plasticity selection gradient
+0.36939/0.11305
+
+#Tolerant vs average plasticity selection gradient
+0.33665/0.16177
+
+#Low temp plasticity selection gradient
+summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
+           data = filter(p_sel_grad_df_filt2, Temp == "16.42")))
+
+#High temp plasticity selection gradient
+summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
+           data = filter(p_sel_grad_df_filt2, Temp == "21.55")))
+
+# How much did temperature affect egg clutch sizes?
+summarySE(measurevar = "Egg_count",
+          groupvars = c("Temp"),
+          data = filter(sel_grad_df_filt, is.na(Egg_count) == FALSE))
+21.17244 - 17.92453
+
+```
+
+Mediation analysis
+
+```{r}
+
+# How much of baseline tolerance's effect on plasticity is direct and
+# remains after accounting for fitness? Almost all of it!
+sel_grad_df_med <- filter(sel_grad_df_filt, is.na(Scaled_egg) == FALSE)
+
+brm_med4 <- brm(
+  bf(Scaled_Q10_trans ~ Scaled_egg + Scaled_LT50_int + (1|Pop) + (1|Temp)),
+              data = sel_grad_df_med,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm_med4null <- brm(
+  bf(Scaled_Q10_trans ~ Scaled_LT50_int + (1|Pop) + (1|Temp)),
+              data = sel_grad_df_med,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+med_bf <- bayesfactor_models(brm_med4, denominator = brm_med4null)
+med_bf
+
+pp_check(brm_med4, resp = "ScaledQ10trans")
+
+posterior_summary(brm_med4)
+posterior_summary(brm_med4null)
+
+(1-(-0.54847236/-0.5630159)) *100
+
+```
+
+Supplemental section
+
+```{r}
+
+## Measure culture ages (days post gravidity) at time of phenotyping
+# Read in age df's
+Aug_F3_ages <- read.csv("Aug_F3_ages.csv")
+Feb_F3_ages <- read.csv("Feb_F3_ages.csv")
+
+# Combine
+F3_ages <- rbind(Aug_F3_ages, Feb_F3_ages)
+
+# Merge ages and fecundity data
+F3_ages$Sib_ID <- gsub("_H", "H", F3_ages$Sib_ID)
+F3_ages$Sib_ID <- gsub("_L", "L", F3_ages$Sib_ID)
+F3_ages$Sib_ID <- gsub("-", "_", F3_ages$Sib_ID)
+
+F3_ages$Sib_ID <- paste(F3_ages$Season, F3_ages$Sib_ID, sep = "_")
+
+sel_grad_w_age <- merge(sel_grad_df_filt,
+                        F3_ages[,-c(1,2,3)],
+                        by = "Sib_ID")
+
+# Calculate age at LT50 phenotyping
+sel_grad_w_age$LT50_age <- as.numeric(sel_grad_w_age$DPG) + as.numeric(as.Date(sel_grad_w_age$LT50_date, "%m/%d/%y") - 
+                                                   as.Date(sel_grad_w_age$Ref_date, "%m/%d/%y"))
+
+# Plot mean LT50 age per pop x temp
+LT50_age_sum <- summarySE(measurevar = "LT50_age",
+                          groupvars = c("Pop", "Temp"),
+                          data = sel_grad_w_age)
+
+LT50_age_sum
+
+LT50_age_sum_all <- summarySE(measurevar = "LT50_age",
+                          groupvars = c(),
+                          data = sel_grad_w_age)
+
+LT50_age_sum_all
+
+LT50_size_sum <- summarySE(measurevar = "Pop_size",
+                          groupvars = c("Pop", "Temp"),
+                          data = sel_grad_w_age)
+
+LT50_size_sum
+
+# Plot means
+LT50_age_sum$Pop = factor(
+  LT50_age_sum$Pop,
+  levels=c("BMR", "SC", "RMR",  "PTD"))
+
+LT50_size_sum$Pop = factor(
+  LT50_size_sum$Pop,
+  levels=c("BMR", "SC", "RMR",  "PTD"))
+
+LT50_size_sum_tot <-  summarySE(measurevar = "Pop_size",
+                          groupvars = c(),
+                          data = sel_grad_w_age)
+
+ggplot(data = LT50_age_sum,
+       aes(x = Pop, y = LT50_age)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = LT50_age-sd, ymax = LT50_age+sd), 
+                width = 0, size = 0.75) +
+  facet_wrap(~Temp) +
+  theme_classic(base_rect_size = 0) +
+  labs(x = "Population", 
+       y = "Mean age at LT50 assay (d post gravidity)")
+
+ggplot(data = LT50_size_sum,
+       aes(x = Pop, y = Pop_size)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = Pop_size-sd, ymax = Pop_size+sd), width = 0, size = 0.75) +
+  facet_wrap(~Temp) +
+  theme_classic(base_rect_size = 0) +
+  labs(x = "Population", y = "Population size per culture")
+
+ggplot(data = sel_grad_w_age,
+       aes(x = Pop, y = Pop_size)) +
+  geom_jitter(size = 1, width = 0.1) +
+  facet_wrap(~Temp) +
+  theme_classic(base_rect_size = 0) +
+  labs(x = "Population", y = "Population size per culture")
+
+#Model effect of age on selection model
+sel_grad_w_age$Scaled_LT50_age <- scale(sel_grad_w_age$LT50_age)
+sel_grad_w_age$Scaled_pop_size <- scale(sel_grad_w_age$Pop_size)
+
+
+bf1_age <- bf(Scaled_egg ~ Temp + Season + Scaled_LT50_age + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+            (1|Pop/Season/Pool/Sibship))
+
+bf1_size <- bf(Scaled_egg ~ Temp + Season + Scaled_pop_size + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+            (1|Pop/Season/Pool/Sibship))
+
+bf1_size_age <- bf(Scaled_egg ~ Temp + Season + Scaled_LT50_age + Scaled_pop_size + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+            (1|Pop/Season/Pool/Sibship))
+
+brm_age <- brm(bf1_age + bf2a + set_rescor(FALSE),
+              data = sel_grad_w_age,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm_size <- brm(bf1_size + bf2a + set_rescor(FALSE),
+              data = sel_grad_w_age,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm_size_age <- brm(bf1_size_age + bf2a + set_rescor(FALSE),
+              data = sel_grad_w_age,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+# Should age or population size be incorporated in the model? Nope
+age_bf <- bayesfactor_models(brm0, brm_age, brm_size,
+                             denominator = brm_size_age)
+age_bf
+
+# Does age at LT50 bear a significant effect? Nope
+
+
+posterior_interval(
+  brm_age,
+  prob = 0.9,
+  type = "central")
+
+# Does population size at LT50 bear a significant effect? Nope
+posterior_interval(
+  brm_size,
+  prob = 0.9,
+  type = "central")
+
+posterior_interval(
+  brm_size_age,
+  prob = 0.95,
+  type = "central")
+
+plot(brm_size_age)
+
+# What percent of tolerance's effect on plasticity is driven by fitness?
+brm_tol_egg1 <- brm(Scaled_Q10 ~ Scaled_LT50_int + Scaled_egg,
+              data = sel_grad_w_age,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm_tol_egg2 <- brm(Scaled_Q10 ~ Scaled_LT50_int,
+              data = sel_grad_w_age,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+posterior_summary(brm_tol_egg1)
+posterior_summary(brm_tol_egg2)
+
+(1-(0.44145742/0.45148793)) * 100
+```
+
+```{r}
+
+# Model quality check on multivariate selection gradient model plasticity
+pp_check(brm0, resp = "Scaledegg")
+pp_check(brm0, resp = "ScaledQ10trans")
+
+
+
+Fig_S5B <- plot(loo(brm0))
+Fig_S5B
+
+plot(brm0)
+
+```
+
+Supplementary body size fig
+
+```{r}
+
+length_sum <- summarySE(measurevar = "Total_length",
+                        groupvars = c("Pop", "Temp"),
+                        data = filter(fec_meta_df, 
+                                      is.na(Total_length) == FALSE))
+
+length_sum <- merge(length_sum,
+                    lat_index,
+                    by = "Pop")
+
+# Plot fecundity ~ size
+ggplot(data = fec_meta_df,
+       aes(x = Total_length, y = Egg_count)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+length_sum$Pop = factor(
+  length_sum$Pop,
+  levels=c("BMR", "SC", "RMR",  "PTD"))
+
+## Compare brm0 to model w/ size
+# Calc average size per Sib_ID
+fec_meta_df$Sib_ID <- paste(fec_meta_df$Season,
+                            fec_meta_df$Sib_ID,
+                            sep = "_")
+
+size_sib_sum <- summarySE(measurevar = "Total_length",
+                          groupvars = c("Sib_ID"),
+                          data = filter(fec_meta_df, 
+                                        is.na(Total_length) == FALSE))
+
+sel_grad_w_age_len <- merge(sel_grad_w_age,
+                            data.frame(
+                              Sib_ID = size_sib_sum$Sib_ID,
+                              Total_length = size_sib_sum$Total_length
+                            ))
+
+bf1_age <- bf(Scaled_egg ~ Temp + Season + Scaled_LT50_age + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+            (1|Pop/Season/Pool/Sibship))
+
+bf1_size <- bf(Scaled_egg ~ Temp + Season + Scaled_pop_size + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+            (1|Pop/Season/Pool/Sibship))
+
+bf1_size_age <- bf(Scaled_egg ~ Temp + Season + Scaled_LT50_age + Scaled_pop_size + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+            (1|Pop/Season/Pool/Sibship))
+
+bf1_len <- bf(Scaled_egg ~ Temp + Season + Scaled_len + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+            (1|Pop/Season/Pool/Sibship))
+
+bf1_len_age <- bf(Scaled_egg ~ Temp + Season + Scaled_len + Scaled_LT50_age + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+            (1|Pop/Season/Pool/Sibship))
+
+bf1_len_size <- bf(Scaled_egg ~ Temp + Season + Scaled_len + Scaled_pop_size + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+            (1|Pop/Season/Pool/Sibship))
+
+bf1_len_age_size <- bf(Scaled_egg ~ Temp + Season + Scaled_len + Scaled_LT50_age + Scaled_pop_size + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+            (1|Pop/Season/Pool/Sibship))
+
+sel_grad_w_age_len$Scaled_len <- scale(sel_grad_w_age_len$Total_length)
+
+brm_base <- brm(bf1a + bf2a + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm_age <- brm(bf1_age + bf2a + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm_size <- brm(bf1_size + bf2a + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm_size_age <- brm(bf1_size_age + bf2a + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm_len <- brm(bf1_len + bf2a + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm_len_age <- brm(bf1_len_age + bf2a + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm_len_size <- brm(bf1_len_size + bf2a + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm_len_age_size <- brm(bf1_len_age_size + bf2a + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = student(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+# Should age or population size be incorporated in the model? Nope
+len_bf <- bayesfactor_models(brm_age, brm_size, brm_base, 
+                             brm_len, brm_len_age, brm_len_size, 
+                             brm_len_age_size, denominator = brm_size_age)
+len_bf
+
+# QC plots for supplement
+pp_check(brm_len, resp = "Scaledegg")
+
+pp_check(brm_len, resp = "ScaledQ10trans")
+
+plot(loo(brm_len))
+
+plot(brm_len)
+
+#Plot relative likelihoods
+Fig_S12_df <- data.frame(Model = c("Base", "Base + density", "Base + age", "Base + length", 
+                                   "Base + density + age", "Base + density + length",
+                                   "Base + age + length", "Base + density + age + length"),
+                    BF = c(1.01, 4.06, 3.59, 56.66, 1, 13.54, 13.21, 3.15))
+
+# Plot bf
+FigS12 <- ggplot(data = Fig_S12_df,
+                 aes(x = BF, y = Model)) +
+  geom_bar(stat = "identity", width = .05, color = "white") +
+  geom_point(size = 4) +
+  theme_classic(base_rect_size = 0, base_size = 20) +
+  theme(legend.position = "none") +
+  labs(x = "Relative likelihood",
+       y = "Model")
+
+FigS12
+
+posterior_summary(brm_len)
+
+# Plot plasticity supplemental figs
+Fig_S4A <- ggplot(data = length_sum,
+                  aes(x = Temp, y = Total_length, 
+                      group = Pop, color = -Lat)) +
+  geom_line(stat = "identity") +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = Total_length - ci, ymax = Total_length + ci),
+                width = 0) +
+  theme_classic(base_rect_size = 0) +
+  facet_grid(.~Pop) +
+  scale_color_viridis_c(guide = FALSE) +
+  labs(x = "Temperature (°C)", y = "Body length (µm)")
+
+Fig_S4A
+
+# How many eggs were gained per unit female body size?
+summary(lm(Estimate.Scaledegg ~ Total_length, data = p_sel_grad_df_filt2))
+
+# Create supplemental fig for body length's effect on egg clutch size
+ggplot(data = sel_grad_w_age_len,
+       aes(x = Total_length, y = Egg_count)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Mean female body length (µm)", y = "Mean clutch size (eggs)")
+
+```
+
+
+
+Finish Fig S4 w/ plast of generation time plot
+
+```{r}
+
+# Read in generation time data
+Aug_dev_df <- read.csv("Aug_F3_dev.csv")
+Feb_dev_df <- read.csv("Feb_F3_dev.csv")
+Feb_init_df <- read.csv("Feb_F3_init_index.csv")
+
+# Add initiation date to Feb dataset
+Feb_dev_df <- merge(Feb_dev_df,
+                    Feb_init_df,
+                    by = "Sibship")
+
+# Correct sibships so they rep. season
+Aug_dev_df$Sibship <- paste(Aug_dev_df$Sibship,
+                            "Aug",
+                            sep = "_")
+
+Feb_dev_df$Sibship <- paste(Feb_dev_df$Sibship,
+                            "Feb",
+                            sep = "_")
+
+# Combine data sets + add variable for temp
+All_dev_df <- rbind(Aug_dev_df,
+                    data.frame(
+                      Season = Feb_dev_df$Season,
+                      Date = Feb_dev_df$Date,
+                      Initiation_Date = Feb_dev_df$Init_date,
+                      Sibship = Feb_dev_df$Sibship,
+                      L_Gravidity = Feb_dev_df$L_Gravidity,
+                      H_Gravidity = Feb_dev_df$H_Gravidity
+                    ))
+
+All_dev_L <- All_dev_df[,-c(6)]
+All_dev_H <- All_dev_df[,-c(5)]
+All_dev_L$Temp <- "Low"
+All_dev_H$Temp <- "High"
+
+# Rename grav binary variable
+colnames(All_dev_L)[5] = "Grav"
+colnames(All_dev_H)[5] = "Grav"
+
+All_dev_df <- rbind(All_dev_L,
+                    All_dev_H)
+
+# Calculate days between init and dev scoring
+All_dev_df$Days <- as.numeric(as.Date(All_dev_df$Date, '%m/%d/%y') - 
+  as.Date(All_dev_df$Initiation_Date, '%m/%d/%y'))
+
+# Standardize N/Y or No/Y as 0/1 binary values
+All_dev_df$Grav_bin <- ifelse(All_dev_df$Grav == "No" | 
+                                All_dev_df$Grav == "N" , 0, 1)
+
+# Adjust scores - if sibship x temp had prior 1, then all later values are 1
+
+
+# Create a pop variable
+All_dev_df$Pop <- gsub("[1-9].*", "", All_dev_df$Sibship)
+All_dev_df$Pop <- gsub("RM", "RMR", gsub("RMR", "RM", All_dev_df$Pop))
+
+# Plot logistic regression of time to gravidity per pop x temp
+All_dev_df$Pop = factor(
+  All_dev_df$Pop,
+  levels=c("BMR", "SC", "RMR",  "PTD"))
+
+# Plot raw trends
+ggplot(data = All_dev_df,
+       aes(x = Days, y = Grav_bin, group = Temp, color = Temp)) +
+  facet_grid(Season~Pop) +
+  geom_smooth(method = "glm", 
+              method.args = list(family = "binomial"),
+              fullrange = TRUE)
+
+## Estimate LD50's for dev of each Pop x temp group
+# BMR
+BMR_L_dev_glm <- glm(Grav_bin ~ Days, family = binomial(link = "logit"),
+  data = filter(All_dev_df, Pop == "BMR" & Temp == "Low"))
+BMR_H_dev_glm <- glm(Grav_bin ~ Days, family = binomial(link = "logit"),
+  data = filter(All_dev_df, Pop == "BMR" & Temp == "High"))
+
+# SC
+SC_L_dev_glm <- glm(Grav_bin ~ Days, family = binomial(link = "logit"),
+  data = filter(All_dev_df, Pop == "SC" & Temp == "Low"))
+SC_H_dev_glm <- glm(Grav_bin ~ Days,
+  data = filter(All_dev_df, Pop == "SC" & Temp == "High"))
+
+# RMR
+RMR_L_dev_glm <- glm(Grav_bin ~ Days, family = binomial(link = "logit"),
+  data = filter(All_dev_df, Pop == "RMR" & Temp == "Low"))
+RMR_H_dev_glm <- glm(Grav_bin ~ Days, family = binomial(link = "logit"),
+  data = filter(All_dev_df, Pop == "RMR" & Temp == "High"))
+
+# PTD
+PTD_L_dev_glm <- glm(Grav_bin ~ Days, family = binomial(link = "logit"),
+  data = filter(All_dev_df, Pop == "PTD" & Temp == "Low"))
+PTD_H_dev_glm <- glm(Grav_bin ~ Days, family = binomial(link = "logit"),
+  data = filter(All_dev_df, Pop == "PTD" & Temp == "High"))
+
+# Output LD50's
+BMR_L_dev_p <- dose.p(BMR_L_dev_glm, cf = 1:2, p = 0.5)
+BMR_H_dev_p <- dose.p(BMR_H_dev_glm, cf = 1:2, p = 0.5)
+
+SC_L_dev_p <- dose.p(SC_L_dev_glm, cf = 1:2, p = 0.5)
+SC_H_dev_p <- dose.p(SC_H_dev_glm, cf = 1:2, p = 0.5)
+
+RMR_L_dev_p <- dose.p(RMR_L_dev_glm, cf = 1:2, p = 0.5)
+RMR_H_dev_p <- dose.p(RMR_H_dev_glm, cf = 1:2, p = 0.5)
+
+PTD_L_dev_p <- dose.p(BMR_L_dev_glm, cf = 1:2, p = 0.5)
+PTD_H_dev_p <- dose.p(BMR_H_dev_glm, cf = 1:2, p = 0.5)
+
+# Create data frame
+DPG_sum <- data.frame(Pop = c("BMR", "BMR", "SC", "SC", 
+                              "RMR", "RMR", "PTD", "PTD"),
+                      Temp = c(16.42, 21.55, 16.42, 21.55, 
+                               16.42, 21.55, 16.42, 21.55),
+                      Gen = c(34.56929, 29.71927, 34.2755, 34.50895,
+                              30.59891, 28.98763, 34.56929, 29.71927),
+                      SE = c(2.216088, 1.739492, 1.760956, 3.291561,
+                             1.358909, 1.360291, 2.216088, 1.739492))
+# Merge with lat
+DPG_sum <- merge(DPG_sum,
+                 lat_index,
+                 by = "Pop")
+
+# Create Fig_S4B
+DPG_sum$Pop = factor(
+  DPG_sum$Pop,
+  levels=c("BMR", "SC", "RMR",  "PTD"))
+
+Fig_S4B <- ggplot(data = DPG_sum,
+                  aes(x = Temp, y = Gen, group = Pop, color = -Lat)) +
+  geom_line() +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = Gen - SE, ymax = Gen + SE), 
+                width = 0) +
+  facet_grid(.~Pop) +
+  scale_color_viridis_c(guide = FALSE) +
+  theme_classic(base_rect_size = 0) +
+  labs(x = "Temperature (°C)", y = "Generation time (days)")
+
+Fig_S4B
+
+# Export Fig S4
+Fig_S4 <- ggarrange(Fig_S4A, Fig_S4B, 
+                   labels = c("A", "B"),
+                   heights = c(1, 1),
+                   ncol = 1, nrow = 2, align = "hv")
+
+Fig_S4
+
+```
+
+
