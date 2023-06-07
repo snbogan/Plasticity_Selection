@@ -274,33 +274,40 @@ Fig4A <- ggplot(data = filter(All_LL2_LT50_est, Sex == "F" | Sex == "M"),
 
 Fig4A
 
-#What is the rate of change in LT50 per degree N latitude?
+# What is the rate of change in LT50 per degree N latitude?
 summary(lm(LT50 ~ Lat, data = All_LL2_LT50_est))
 
-#How much more thermally tolerant are females than males?
+# How much more thermally tolerant are females than males?
 summary(lm(LT50 ~ Sex, data = All_LL2_LT50_est))
 
 ```
 
 ```{r}
 
+## Calculate basal LT50 and its plasticity per sib, controlling effect of sex
+
+# Create a culture id
 All_F3_LT50_df$Sib_ID <- paste(All_F3_LT50_df$Sibship,
                                All_F3_LT50_df$Treatment,
                                sep ="_")
 
+# Add latitdue to df
 All_F3_LT50_df <- merge(All_F3_LT50_df,
                         lat_index,
                         by = "Pop")
 
+# Fit model of upper thermal tolerance with fixed effect for sex:temp
 all_glmer <- lme4::glmer(Survival ~ Temp + Lat:Temp + Sex:Temp + 
                            Treatment:Temp +
                            Lat:Treatment:Temp + (1|Sib_ID),
                    family = binomial(link="logit"),
                    data = All_F3_LT50_df)
 
+# Create 'new' data set for fitted values that assumes all samples are female
 All_F3_LT50_df$Sex <- ifelse(All_F3_LT50_df$Sex == "M", "F", 
                                ifelse(All_F3_LT50_df$Sex == "U", "F", "F"))
 
+# Export fitted data for use in parameter estimates
 All_F3_LT50_pred <- fitted(all_glmer, newdata = All_F3_LT50_df) %>%
   as_tibble() %>%
   bind_cols(All_F3_LT50_df)
@@ -319,7 +326,7 @@ glm(value ~ Temp, family = quasibinomial("logit"),
     data = df))
 
 ## Compile lo and hi drcs into single df
-# Hi
+# Hi temp
 hi_dosep_ls <- list()
 
 for (i in 1:length(drcs_hi)) {
@@ -365,6 +372,8 @@ sibship_LT50_filt <- merge(sibship_LT50_filt,
                            by = "Pop")
 
 ```
+
+Plasticity coefficients are adjusted below using methods implemented in R by Gunderson, 2023: https://onlinelibrary.wiley.com/doi/full/10.1111/gcb.16710
 
 ```{r}
 
@@ -454,7 +463,6 @@ posterior_summary(adj_intorth_brm)
 (1-(3.842827e-06/7.386845e-06)) * 100
 
 # Effect on variance explained by baseline LT50 after orthogonal polynomial transformation
-
 marginal_effects <- marginal_effects(adj_intorth_brm)
 
 total_var <- var(fitted(adj_intorth_brm)[,1])
@@ -553,12 +561,10 @@ Fig_4
 
 ```{r}
 
-# Model quality check on plasticity ~ tolerance LMM
-Fig_S5A <- pp_check(adj_intorth_brm)
-Fig_S5A
+# Model quality checks for supplement on plasticity ~ tolerance LMM
+pp_check(adj_intorth_brm)
 
-Fig_S5B <- plot(loo(adj_intorth_brm))
-Fig_S5B
+plot(loo(adj_intorth_brm))
 
 plot(adj_intorth_brm)
 
