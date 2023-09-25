@@ -65,6 +65,66 @@ lat_index <- data.frame(Pop = c("BMR", "SC", "RMR", "PTD"),
 
 ```
 
+# Estimate evolved, seasonal changes in LT50
+
+```{r}
+
+# BMR
+BMR_Season_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Pop == "BMR"), 
+                    Survival ~ Temp, Season, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~Season, ~Season, ~1),
+                    type = "binomial")
+
+summary(BMR_Season_LL2)
+
+0.056134 / 7.49  
+0.121671 / 7.49 
+
+# SC
+SC_Season_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Pop == "SC"), 
+                    Survival ~ Temp, Season, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~Season, ~Season, ~1),
+                    type = "binomial")
+
+summary(SC_Season_LL2)
+
+0.433238 / 7.55
+0.092190 / 7.55
+
+# RMR
+RMR_Season_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Pop == "RMR"), 
+                    Survival ~ Temp, Season, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~Season, ~Season, ~1),
+                    type = "binomial")
+
+summary(RMR_Season_LL2)
+
+0.396577 / 4.94 
+0.077502 / 4.94
+  
+# PTD
+  
+PTD_Season_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Pop == "PTD"), 
+                    Survival ~ Temp, Season, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~Season, ~Season, ~1),
+                    type = "binomial")
+
+summary(PTD_Season_LL2)  
+
+0.162027 / 8.04
+0.083830 / 8.04 
+  
+```
+
+
 ```{r}
 
 ## Fit logistic regression to each sex x lat group
@@ -243,6 +303,265 @@ SE = c(BMRF21.5_LT50$`Std. Error`, BMRM21.5_LT50$`Std. Error`,
          PTDF16.5_LT50$`Std. Error`, PTDM16.5_LT50$`Std. Error`))
 
 ```
+
+```{r}
+
+# Create and export a pop-level LT50 estimate df that is grouped by season
+## Fit logistic regression to each sex x lat group
+# Create sex_pop variable
+All_F3_LT50_df$Sex_Pop_Season <- paste(All_F3_LT50_df$Sex,
+                                  All_F3_LT50_df$Pop,
+                                  All_F3_LT50_df$Treatment,
+                                  All_F3_LT50_df$Season,
+                                  sep = "_")
+
+## Fit ll.2 drc's
+
+# BMR
+BMR_F_Aug_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "F_BMR_16.42_Aug"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+BMR_F_Feb_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "F_BMR_16.42_Feb"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+BMR_M_Aug_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "M_BMR_16.42_Aug"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+BMR_M_Feb_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "M_BMR_16.42_Feb"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+BMR_U_Feb_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "U_BMR_16.42_Feb"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+BMR_U_Aug_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "U_BMR_16.42_Aug"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+# SC
+SC_F_Aug_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "F_SC_16.42_Aug"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+SC_F_Feb_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "F_SC_16.42_Feb"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+SC_M_Aug_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "M_SC_16.42_Aug"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+SC_M_Feb_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "M_SC_16.42_Feb"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+SC_U_Feb_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "U_SC_16.42_Feb"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+SC_U_Aug_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "U_SC_16.42_Aug"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+# RMR
+RMR_F_Aug_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "F_RMR_16.42_Aug"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+RMR_F_Feb_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "F_RMR_16.42_Feb"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+RMR_M_Aug_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "M_RMR_16.42_Aug"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+RMR_M_Feb_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "M_RMR_16.42_Feb"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+RMR_U_Feb_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "U_RMR_16.42_Feb"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+RMR_U_Aug_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "U_RMR_16.42_Aug"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+# PTD
+PTD_F_Aug_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "F_PTD_16.42_Aug"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+PTD_F_Feb_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "F_PTD_16.42_Feb"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+PTD_M_Aug_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "M_PTD_16.42_Aug"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+PTD_M_Feb_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "M_PTD_16.42_Feb"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+PTD_U_Feb_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "U_PTD_16.42_Feb"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+PTD_U_Aug_All_LL2 <- drm(data = filter(All_F3_LT50_df, 
+                                   Sex_Pop_Season == "U_PTD_16.42_Aug"), 
+                    Survival ~ Temp,, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~1),
+                    type = "binomial")
+
+# Export LT50 values
+BMR_F_Aug_LT50 <-as.data.frame(ED(BMR_F_Aug_All_LL2, 50))
+BMR_F_Feb_LT50 <-as.data.frame(ED(BMR_F_Feb_All_LL2, 50))
+BMR_M_Aug_LT50 <-as.data.frame(ED(BMR_M_Aug_All_LL2, 50))
+BMR_M_Feb_LT50 <-as.data.frame(ED(BMR_M_Feb_All_LL2, 50))
+BMR_U_Aug_LT50 <-as.data.frame(ED(BMR_U_Aug_All_LL2, 50))
+BMR_U_Feb_LT50 <-as.data.frame(ED(BMR_U_Feb_All_LL2, 50))
+
+SC_F_Aug_LT50 <-as.data.frame(ED(SC_F_Aug_All_LL2, 50))
+SC_F_Feb_LT50 <-as.data.frame(ED(SC_F_Feb_All_LL2, 50))
+SC_M_Aug_LT50 <-as.data.frame(ED(SC_M_Aug_All_LL2, 50))
+SC_M_Feb_LT50 <-as.data.frame(ED(SC_M_Feb_All_LL2, 50))
+SC_U_Aug_LT50 <-as.data.frame(ED(SC_U_Aug_All_LL2, 50))
+SC_U_Feb_LT50 <-as.data.frame(ED(SC_U_Feb_All_LL2, 50))
+
+RMR_F_Aug_LT50 <-as.data.frame(ED(RMR_F_Aug_All_LL2, 50))
+RMR_F_Feb_LT50 <-as.data.frame(ED(RMR_F_Feb_All_LL2, 50))
+RMR_M_Aug_LT50 <-as.data.frame(ED(RMR_M_Aug_All_LL2, 50))
+RMR_M_Feb_LT50 <-as.data.frame(ED(RMR_M_Feb_All_LL2, 50))
+RMR_U_Aug_LT50 <-as.data.frame(ED(RMR_U_Aug_All_LL2, 50))
+RMR_U_Feb_LT50 <-as.data.frame(ED(RMR_U_Feb_All_LL2, 50))
+
+PTD_F_Aug_LT50 <-as.data.frame(ED(PTD_F_Aug_All_LL2, 50))
+PTD_F_Feb_LT50 <-as.data.frame(ED(PTD_F_Feb_All_LL2, 50))
+PTD_M_Aug_LT50 <-as.data.frame(ED(PTD_M_Aug_All_LL2, 50))
+PTD_M_Feb_LT50 <-as.data.frame(ED(PTD_M_Feb_All_LL2, 50))
+PTD_U_Aug_LT50 <-as.data.frame(ED(PTD_U_Aug_All_LL2, 50))
+PTD_U_Feb_LT50 <-as.data.frame(ED(PTD_U_Feb_All_LL2, 50))
+
+# Combine LT50 estimates into single dataframe
+All_LL2_LT50_seas <- data.frame(Population = c("BMR", "BMR", "BMR", "BMR", "BMR", "BMR",
+                                       "SC", "SC", "SC", "SC", "SC", "SC",
+                                       "RMR", "RMR", "RMR", "RMR", "RMR", "RMR",
+                                       "PTD", "PTD", "PTD", "PTD", "PTD", "PTD"),
+                               Sex = c("F", "F", "M", "M", "U", "U",
+                                       "F", "F", "M", "M", "U", "U",
+                                       "F", "F", "M", "M", "U", "U",
+                                       "F", "F", "M", "M", "U", "U"),
+                               Season = c("Aug", "Feb", "Aug", "Feb", "Aug", "Feb",
+                                         "Aug", "Feb", "Aug", "Feb", "Aug", "Feb",
+                                         "Aug", "Feb", "Aug", "Feb", "Aug", "Feb",
+                                         "Aug", "Feb", "Aug", "Feb", "Aug", "Feb"),                           
+LT50 = c(BMR_F_Aug_LT50$Estimate, BMR_F_Feb_LT50$Estimate,
+         BMR_M_Aug_LT50$Estimate, BMR_M_Feb_LT50$Estimate,
+         BMR_U_Aug_LT50$Estimate, BMR_U_Feb_LT50$Estimate,
+         SC_F_Aug_LT50$Estimate, SC_F_Feb_LT50$Estimate,
+         SC_M_Aug_LT50$Estimate, SC_M_Feb_LT50$Estimate,
+         SC_U_Aug_LT50$Estimate, SC_U_Feb_LT50$Estimate,
+         RMR_F_Aug_LT50$Estimate, RMR_F_Feb_LT50$Estimate,
+         RMR_M_Aug_LT50$Estimate, RMR_M_Feb_LT50$Estimate,
+         RMR_U_Aug_LT50$Estimate, RMR_U_Feb_LT50$Estimate,
+         PTD_F_Aug_LT50$Estimate, PTD_F_Feb_LT50$Estimate,
+         PTD_M_Aug_LT50$Estimate, PTD_M_Feb_LT50$Estimate,
+         PTD_U_Aug_LT50$Estimate, PTD_U_Feb_LT50$Estimate),
+SE =  c(BMR_F_Aug_LT50$`Std. Error`, BMR_F_Feb_LT50$`Std. Error`,
+         BMR_M_Aug_LT50$`Std. Error`, BMR_M_Feb_LT50$`Std. Error`,
+         BMR_U_Aug_LT50$`Std. Error`, BMR_U_Feb_LT50$`Std. Error`,
+         SC_F_Aug_LT50$`Std. Error`, SC_F_Feb_LT50$`Std. Error`,
+         SC_M_Aug_LT50$`Std. Error`, SC_M_Feb_LT50$`Std. Error`,
+         SC_U_Aug_LT50$`Std. Error`, SC_U_Feb_LT50$`Std. Error`,
+         RMR_F_Aug_LT50$`Std. Error`, RMR_F_Feb_LT50$`Std. Error`,
+         RMR_M_Aug_LT50$`Std. Error`, RMR_M_Feb_LT50$`Std. Error`,
+         RMR_U_Aug_LT50$`Std. Error`, RMR_U_Feb_LT50$`Std. Error`,
+         PTD_F_Aug_LT50$`Std. Error`, PTD_F_Feb_LT50$`Std. Error`,
+         PTD_M_Aug_LT50$`Std. Error`, PTD_M_Feb_LT50$`Std. Error`,
+         PTD_U_Aug_LT50$`Std. Error`, PTD_U_Feb_LT50$`Std. Error`))
+
+write.csv(All_LL2_LT50_seas, 
+          "~/Documents/GitHub/Tig_Field_LT50/LT50_data/All_LL2_LT50_seas.csv",
+          row.names = FALSE)
+
+```
+
 
 ```{r}
 
@@ -556,6 +875,10 @@ png("~/Documents/GitHub/HotOnes_Tigriopus/Figures/Fig_4.png", units = "in", widt
     res = 600)
 
 Fig_4
+
+# What is the BCV of baseline LT50 vs its adjusted plasticity?
+sd(sibship_LT50_filt2$Q10_adj) / mean(sibship_LT50_filt2$Q10_adj)
+sd(sibship_LT50_filt2$LT50_lo) / mean(sibship_LT50_filt2$LT50_lo)
 
 ```
 
