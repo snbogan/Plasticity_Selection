@@ -17,8 +17,119 @@ library(bayestestR)
 library(bayesplot)
 library(ggpubr)
 library(mediation)
+library(boot)
+library(ggrepel)
 
 ```
+
+Conceptual diagram (Fig. 1)
+
+```{r}
+
+## Create Figure 1 panel
+# Defining plasticity and baseline tolerance
+a_df <- data.frame(tol_lvl = c("Low tol", "Hi tol", "Low tol", "Hi tol"),
+                   LT50 = c(0.25, 0.75, 0.6, 0.8),
+                   Temp = c(0.25, 0.25, 0.75, 0.75))
+
+Fig1A <- ggplot(data = a_df,
+                aes(x = Temp, y = LT50, 
+                    group = tol_lvl, color = tol_lvl)) +
+  geom_point(size = 3) +
+  geom_line(size = 1) +
+  geom_segment(aes(x = .775, xend = .775, y = 0.75, yend = 0.8), color = "#fde725") +
+  geom_segment(aes(x = .775, xend = .775, y = 0.25, yend = 0.6), color = "#440154") +
+  annotate("text", x = 0.73, y = .775, label = "Low pl", color = "#fde725", size = 6) +
+  annotate("text", x = 0.73, y = .4, label = "Hi pl", color = "#440154", size = 6) +
+  theme_classic(base_size = 20) +
+  theme(legend.position = "none",
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        text = element_text(color = "white"),
+        axis.line = element_line(color = "white"),
+        panel.background = element_rect(fill = "transparent", color = NA),
+        plot.background= element_rect(fill = "transparent", color = NA)) +
+  scale_color_viridis_d(direction = -1) +
+  geom_label_repel(data = filter(a_df, Temp == 0.25),
+                   aes(label = tol_lvl, color = tol_lvl), 
+                   size = 6, nudge_x = .2, fill = "transparent", label.size = 0) +
+  labs(x = "Temperature (°C)", y = expression("LT"[50]),
+       title = "Tolerance and plasticity")
+
+# Show Fig 1A
+Fig1A 
+
+## Figure 1B: limit and tradeoff
+x_values <- seq(-10, 10, length.out = 1000)
+
+piecewise_function <- function(x) {
+  ifelse(x < -5, 0, -exp(x - .2)	)
+}
+
+# Apply the function to the x values
+y_values <- sapply(x_values, piecewise_function)
+
+# Create a data frame for plotting
+data <- data.frame(x = x_values, y = y_values)
+
+# Plot top of Fig1B
+Fig1Btop <- ggplot(data, aes(x, y)) +
+  geom_line(size = 1, color = "white") +
+  coord_cartesian(xlim = c(0, 10)) +
+  theme_classic(base_size = 20) +
+  theme(legend.position = "none",
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        text = element_text(color = "white"),
+        axis.line = element_line(color = "white"),
+        panel.background = element_rect(fill = "transparent", color = NA),
+        plot.background= element_rect(fill = "transparent", color = NA)) +
+  labs(x = "Tolerance", y = "Plasticity",
+       title = "Physiological limit")
+
+# Plot bottom half of Fig1B
+df_b_bot <- data.frame(Fitness = c(0, 0, .33, -.33, .66, -.66),
+                       Pl = c(0,1,0,1,0,1),
+                       pl_lvl = c(1, 1, 2, 2, 3, 3))
+
+Fig1Bbot <- ggplot(df_b_bot, 
+                   aes(x = Pl, y = Fitness, 
+                       group = pl_lvl, color = pl_lvl)) +
+  geom_line(size = 1) +
+  theme_classic(base_size = 20) +
+  theme(legend.position = "none",
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        text = element_text(color = "white"),
+        axis.line = element_line(color = "white"),
+        panel.background = element_rect(fill = "transparent", color = NA),
+        plot.background= element_rect(fill = "transparent", color = NA)) +
+  scale_color_viridis_c() +
+  labs(y = "Fitness", x = "Plasticity",
+       title = "Fitness tradeoff")
+
+Fig1Bbot
+
+# Arrange panel
+Fig1B <- ggarrange(Fig1Btop, Fig1Bbot,
+                   labels = c("", ""),
+                   widths = c(1, 1),
+                   ncol = 1, nrow = 2, align = "hv",
+                   font.label = list(color = "white"))
+
+Fig_1 <- ggarrange(Fig1A, Fig1B,
+                   labels = c("A", "B"),
+                   heights = c(1, 1),
+                   ncol = 2, nrow = 1, align = "v",
+                   font.label = list(color = "white"))
+
+ggsave(Fig_1,
+       units = "in", width = 12, height = 6, 
+       filename = "~/Documents/GitHub/Plasticity_Selection/Figures/Fig1.png",
+       bg = "transparent")
+
+```
+
 
 Read in and wrangle fecundity, body size, tol, and pl df
 
@@ -313,13 +424,22 @@ Fig5C <- ggplot(data = p_sel_grad_df_filt2,
               method = "lm", fullrange = TRUE, 
               size = 0.75, se = TRUE) +
   theme_classic(base_rect_size = 0, base_size = 20) +
-  theme(legend.position = "none") +
+  theme(legend.position = "none",
+        legend.background = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent"),
+        strip.background = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent", color = NA)) +
   scale_color_discrete(direction = -1) +
   scale_fill_discrete(direction = -1) +
   facet_grid(~quantile) +
-  labs(x = expression("Scaled Q"[10]), y = "Scaled mean clutch size")
+  labs(x = expression("Scaled Q"[10]~" of LT"[50]), y = "Scaled mean clutch size")
 
 Fig5C
+
+ggsave(Fig5C,
+       units = "in", width = 12, height = 6, 
+       filename = "~/Documents/WSN_23_Fig3.png",
+       bg = "transparent")
 
 # Export Fig. 5
 Fig_5_r1 <- ggarrange(Fig5A, Fig5B, 
@@ -875,6 +995,196 @@ ggplot(data = sel_grad_w_age_len,
 
 ```
 
+Test for genetic correlations between basal tolerance and plasticity 
+
+Aproach: Model 2 of structural eq model being a multivariate response of tol and plast
+varying according to the nested ID effect
+
+```{r}
+
+# Define first, second, and third bf's for SEM
+bf1_len_mod <- bf(Scaled_egg ~ Temp + Season + Scaled_len + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp)
+
+bf_pl <- bf(Scaled_Q10 ~ (1|Pop/Season/Pool/Sibship))
+bf_tol <- bf(Scaled_LT50_int ~ (1|Pop/Season/Pool/Sibship))
+
+# As test, fit model with just random effect and multivariate outcomes pl + tol
+brm_len_corr <- brm(bf_pl + bf_tol + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = stats::gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+plot(brm_len_corr)
+
+names(coef(brm_len_corr))
+
+# Calculate covariance in random effect on multivariate outcomes
+rand_eff_test <- ranef(brm_len_corr)
+  
+# Extract the conditional effect for the random intercept
+rand_eff_x <- as.data.frame(rand_eff_test$`Pop:Season:Pool:Sibship`)
+  
+# Extract the covariance matrix between random effects on pl and tol
+cov_pl_tol <- cov(rand_eff_x$Estimate.ScaledQ10trans_Intercept,
+                  rand_eff_x$Estimate.ScaledLT50int_Intercept)
+
+# Standard error in cov estimate - standard error does not overlap 0
+se_cov_yz <- sqrt(var(rand_eff_x[, 1]) / nrow(rand_eff_x) * (1 + 2 * cov_pl_tol))
+se_cov_yz
+
+# Plot
+data_subset <- rand_eff_x[, c("Estimate.ScaledQ10trans_Intercept", "Estimate.ScaledLT50int_Intercept")]
+
+ggplot(data = data_subset, 
+       aes(y = `Estimate.ScaledQ10trans_Intercept`, 
+       x = `Estimate.ScaledLT50int_Intercept`)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  labs(x = "Basal tolerance breeding value", 
+       y = "Thermal plasticity breeding value")
+
+# Perform as above but for full model
+bf2a_corr <- bf(Scaled_Q10_trans ~ LT50_int_orth_sc + I(LT50_int_orth_sc^2))
+
+brm_corr_full <- brm(bf1_len + 
+               bf(Scaled_Q10_trans ~ Scaled_LT50_int + (1|Pop/Season/Pool/Sibship)) +
+               bf(Scaled_LT50_int ~ (1|Pop/Season/Pool/Sibship)) + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = stats::gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+save(brm_corr_full, file = "brm_corr_full.Rdata")
+
+brm_trade_lim <- brm(bf1_len + 
+               bf(Scaled_Q10_trans ~ Scaled_LT50_int) +
+               bf(Scaled_LT50_int ~ 1) + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = stats::gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+save(brm_trade_lim, file = "brm_trade_lim.Rdata")
+
+brm_trade_corr <- brm(bf1_len + 
+               bf(Scaled_Q10_trans ~ (1|Pop/Season/Pool/Sibship)) +
+               bf(Scaled_LT50_int ~ (1|Pop/Season/Pool/Sibship)) + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = stats::gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+save(brm_trade_corr, file = "brm_trade_corr.Rdata")
+
+
+brm_corr_lim <- brm(bf(Scaled_egg ~ Temp + Season + Scaled_len + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp +
+            (1|Pop/Season/Pool/Sibship)) + 
+               bf(Scaled_Q10_trans ~ Scaled_LT50_int + (1|Pop/Season/Pool/Sibship)) +
+               bf(Scaled_LT50_int ~ (1|Pop/Season/Pool/Sibship)) + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = stats::gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+save(brm_corr_lim, file = "brm_corr_lim.Rdata")
+
+brm_corr <- brm(bf(Scaled_egg ~ Temp + Season + Scaled_len + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp +
+            (1|Pop/Season/Pool/Sibship)) + 
+               bf(Scaled_Q10_trans ~ (1|Pop/Season/Pool/Sibship)) +
+               bf(Scaled_LT50_int ~ (1|Pop/Season/Pool/Sibship)) + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = stats::gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+save(brm_corr, file = "brm_corr.Rdata")
+
+brm_lim <- brm(bf(Scaled_egg ~ Temp + Season + Scaled_len + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp +
+            (1|Pop/Season/Pool/Sibship)) + 
+               bf(Scaled_Q10_trans ~ Scaled_LT50_int) +
+               bf(Scaled_LT50_int ~ 1) + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = stats::gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+save(brm_lim, file = "brm_lim.Rdata")
+
+
+brm_trade <- brm(bf1_len + 
+               bf(Scaled_Q10_trans ~ 1) +
+               bf(Scaled_LT50_int ~ 1) + set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = stats::gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+save(brm_trade, file = "brm_trade.Rdata")
+
+
+library(bayestestR)
+
+# Compare models
+bf_mod_corr <- bayesfactor_models(brm_corr_full, brm_trade_lim, brm_trade_corr, brm_corr_lim, brm_corr,  brm_trade, denominator = brm_lim)
+
+bf_mod_corr
+
+save(bf_mod_corr, file = "bf_mod_corr.Rdata")
+
+brm_corr_full_loo <- loo(brm_corr_full)
+brm_trade_lim_loo <- loo(brm_trade_lim)
+brm_trade_corr_loo <- loo(brm_trade_corr)
+brm_corr_lim_loo <- loo(brm_corr_lim)
+brm_corr_loo <- loo(brm_corr)
+brm_trade_loo <- loo(brm_trade)
+brm_lim_loo <- loo(brm_lim)
+
+loo_compare(brm_corr_full_loo,
+            brm_trade_lim_loo,
+            brm_trade_corr_loo,
+            brm_corr_lim_loo,
+            brm_corr_loo,
+            brm_trade_loo,
+            brm_lim_loo)
+
+library(bridgesampling)
+
+bridgesampling::bridge_sampler(brm_corr_full)
+
+plot(brm_corr_full)
+
+```
 
 
 Finish Fig S4 w/ plast of generation time plot

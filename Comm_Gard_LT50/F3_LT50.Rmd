@@ -585,7 +585,11 @@ Fig4A <- ggplot(data = filter(All_LL2_LT50_est, Sex == "F" | Sex == "M"),
                 width = 0, lty = 1, size = .75) +
   geom_point(size = 3) +
   theme_classic(base_rect_size = 0, base_size = 20) +
-  theme() +
+  theme(legend.position = "none",
+        legend.background = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent"),
+        strip.background = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent", color = NA)) +
   scale_x_continuous(breaks = c(17,19,21)) +
   scale_color_viridis_c(guide = "none") +
   facet_grid(.~Pop) +
@@ -855,6 +859,11 @@ Fig4B <- ggplot(data = sibship_LT50_filt,
   geom_smooth(aes(y = Q10), method = "lm", size = 0.75, lty = 0, 
               color = "black") +
   theme_classic(base_size = 20) +
+  theme(legend.position = "none",
+        legend.background = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent"),
+        strip.background = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent", color = NA)) +
   scale_color_viridis_c(guide = "none") +
   labs(x = expression("Baseline LT"[50]*" (°C)"), 
        y = expression("Q"[10]*" (LT"[50]*")"))
@@ -863,11 +872,16 @@ Fig4B
 
 # Export Fig. 4
 Fig_4 <- ggarrange(Fig4A, Fig4B, 
-                   labels = c("A", "B"),
+                   labels = c("", ""),
                    heights = c(1, 1),
-                   ncol = 1, nrow = 2, align = "hv")
+                   ncol = 2, nrow = 1, align = "hv")
 
 Fig_4
+
+ggsave(Fig_4,
+       units = "in", width = 12, height = 6, 
+       filename = "~/Documents/WSN_23_Fig4.png",
+       bg = "transparent")
 
 # Export Fig 4 as png
 png("~/Documents/GitHub/HotOnes_Tigriopus/Figures/Fig_4.png", units = "in", width = 7, 
