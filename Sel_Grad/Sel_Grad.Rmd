@@ -360,10 +360,15 @@ pp_check(brm3.1, resp = "Scaledegg")
 
 mcmc_pairs(brm1.1)
 
-p_sel_grad_df_filt2 <- fitted(brm_len,
-                              newdata = sel_grad_w_age_len) %>%
-  as_tibble() %>%
-  bind_cols(sel_grad_w_age_len)
+save(brm_nl_tradelim3, file = "brm_nl_tradelim3.Rdata")
+save(sel_grad_w_age_len, file = "sel_grad_w_age_len.Rdata")
+
+load("brm_nl_tradelim3.Rdata")
+load("sel_grad_w_age_len.Rdata")
+
+p_sel_grad_df_filt2 <- sel_grad_w_age_len
+p_sel_grad_df_filt2 <- cbind(data.frame(fitted(brm_nl_tradelim3)),
+                             na.omit(p_sel_grad_df_filt2))
 
 p_sel_grad_df_filt2 <- merge(p_sel_grad_df_filt2,
                                  lat_index,
@@ -457,14 +462,14 @@ Fig_5 <- ggarrange(Fig_5_r1, Fig5C,
 Fig_5
 
 # Export Fig 5 as png
-png("~/Documents/GitHub/HotOnes_Tigriopus/Figures/Fig_5.png", units = "in", width = 12, 
+png("~/Documents/GitHub/Plasticity_Selection/Figures/Fig_5new.png", units = "in", width = 12, 
     height = 12, 
     res = 600)
 
 Fig_5
 
-bf_df2 <- data.frame(Model = c("Tradeoff + Limit", "Limit", "Tradeoff", "Null"),
-                    BF = c(11.37, 1.74, 6.74, 1))
+bf_df2 <- data.frame(Model = c("Tradeoff + Limit", "Tradeoff", "Limit", "Null"),
+                    BF = c(6.02, 3.96, 1.6, 1))
 
 bf_df2$Model = factor(
   bf_df2$Model,
@@ -485,7 +490,7 @@ Fig6 <- ggplot(data = bf_df2,
 # Export Fig 6 as png
 Fig6
 
-png("~/Documents/GitHub/HotOnes_Tigriopus/Figures/Fig_6.png", units = "in", width = 7, 
+png("~/Documents/GitHub/Plasticity_Selection/Figures/Fig_6.png", units = "in", width = 7, 
     height = 7, 
     res = 600)
 
@@ -510,7 +515,7 @@ summary(lm(Estimate.Scaledegg ~ Scaled_Q10,
 summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
            data = filter(p_sel_grad_df_filt2, quantile == "Low LT50")))
 
-#What was the low temp selection gradient on plasticity?
+# What was the low temp selection gradient on plasticity?
 summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
            data = filter(p_sel_grad_df_filt2, 
                            Temp == 16.42)))
@@ -519,7 +524,7 @@ summary(lm(Estimate.Scaledegg ~ Scaled_Q10,
            data = filter(p_sel_grad_df_filt2, 
                            Temp == 21.55)))
 
-#What was the low temp selection gradient on LT50?
+# What was the low temp selection gradient on LT50?
 summary(lm(Estimate.Scaledegg ~ Scaled_LT50, 
            data = filter(p_sel_grad_df_filt2, 
                            Temp == 16.42)))
@@ -670,7 +675,7 @@ ggplot(data = sel_grad_w_age,
   theme_classic(base_rect_size = 0) +
   labs(x = "Population", y = "Population size per culture")
 
-#Model effect of age on selection model
+# Model effect of age on selection model
 sel_grad_w_age$Scaled_LT50_age <- scale(sel_grad_w_age$LT50_age)
 sel_grad_w_age$Scaled_pop_size <- scale(sel_grad_w_age$Pop_size)
 
@@ -1007,35 +1012,69 @@ bf1_len_mod <- bf(Scaled_egg ~ Temp + Season + Scaled_len + Scaled_LT50 + Scaled
                 Scaled_LT50:Temp + Scaled_Q10:Temp + 
             Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp)
 
-bf_pl <- bf(Scaled_Q10 ~ (1|Pop/Season/Pool/Sibship))
-bf_tol <- bf(Scaled_LT50_int ~ (1|Pop/Season/Pool/Sibship))
+bf_pl <- bf(Scaled_Q10_trans ~ (1|Pop/Season/Pool/Sibship) + poly(Scaled_LT50_int,2))
+bf_tol <- bf(Scaled_LT50_int ~ (1|Pop/Season/Pool/Sibship) + 1)
+
+bf_pl_null <- bf(Scaled_Q10_trans ~ poly(Scaled_LT50_int,2))
+bf_tol_null <- bf(Scaled_LT50_int ~ 1)
+
+corr_df <- unique(data.frame(Scaled_Q10_trans = sel_grad_w_age_len$Scaled_Q10_trans,
+                             Scaled_LT50_int = sel_grad_w_age_len$Scaled_LT50_int,
+                             Pop = sel_grad_w_age_len$Pop,
+                             Season = sel_grad_w_age_len$Season,
+                             Pool = sel_grad_w_age_len$Pool,
+                             Sibship = sel_grad_w_age_len$Sibship))
 
 # As test, fit model with just random effect and multivariate outcomes pl + tol
-brm_len_corr <- brm(bf_pl + bf_tol + set_rescor(FALSE),
-              data = sel_grad_w_age_len,
-              family = stats::gaussian(),
+brm_len_corr <- brm(bf_tol + bf_pl + set_rescor(FALSE),
+              data = corr_df,
+              family = gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 60000,
+              save_pars = save_pars(all = TRUE),
+              prior = c(set_prior("normal(0, 1)", 
+                                  class = "b", 
+                                  lb = -Inf, 
+                                  ub = 0,
+                                  resp = "ScaledQ10trans")))
+
+brm_len_null <- brm(bf_tol_null + bf_pl_null + set_rescor(FALSE),
+              data = corr_df,
+              family = gaussian(),
               chains = 4,
               cores = 4,
               iter = 40000,
               warmup = 10000,
-              save_pars = save_pars(all = TRUE))
+              save_pars = save_pars(all = TRUE),
+              prior = c(set_prior("normal(0, 1)", 
+                                  class = "b", 
+                                  lb = -Inf, 
+                                  ub = 0,
+                                  resp = "ScaledQ10trans")))
+
+corr_bf_mod <- bf_models(brm_len_corr, denominator = brm_len_null)
+corr_bf_mod
 
 plot(brm_len_corr)
+plot(brm_len_null)
+summary(brm_len_corr)
+conditional_effects(brm_len_corr)
 
-names(coef(brm_len_corr))
+ranef_corr <- ranef(brm_len_corr)
 
 # Calculate covariance in random effect on multivariate outcomes
-rand_eff_test <- ranef(brm_len_corr)
-  
-# Extract the conditional effect for the random intercept
-rand_eff_x <- as.data.frame(rand_eff_test$`Pop:Season:Pool:Sibship`)
+rand_eff_test <- as.data.frame(ranef_corr$`Pop:Season:Pool:Sibship`)
   
 # Extract the covariance matrix between random effects on pl and tol
-cov_pl_tol <- cov(rand_eff_x$Estimate.ScaledQ10trans_Intercept,
-                  rand_eff_x$Estimate.ScaledLT50int_Intercept)
+cov_pl_tol <- cov(rand_eff_test$Estimate.ScaledQ10trans_Intercept,
+                  rand_eff_test$Estimate.ScaledLT50int_Intercept)
+
+cov_pl_tol
 
 # Standard error in cov estimate - standard error does not overlap 0
-se_cov_yz <- sqrt(var(rand_eff_x[, 1]) / nrow(rand_eff_x) * (1 + 2 * cov_pl_tol))
+se_cov_yz <- sqrt(var(rand_eff_test[, 1]) / nrow(rand_eff_test) * (1 + 2 * cov_pl_tol))
 se_cov_yz
 
 # Plot
@@ -1049,6 +1088,224 @@ ggplot(data = data_subset,
   theme_classic() +
   labs(x = "Basal tolerance breeding value", 
        y = "Thermal plasticity breeding value")
+
+# Bootstrap test of negative covariance
+
+```
+
+# Test out new, non-linear physiological limit effect
+
+```{r}
+
+bf1_len_nl <- bf(Scaled_egg ~ Scaled_len + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+              (1|Pop/Season/Pool/Sibship))
+
+bf1_len_nl2 <- bf(Scaled_egg ~ Scaled_len + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int:Temp +
+              (1|Pop/Season/Pool/Sibship))
+
+bf1_len_nl3 <- bf(Scaled_egg ~ Scaled_len + Season + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp +
+              (1|Pop/Season/Pool/Sibship))
+
+bf1_len_nl4 <- bf(Scaled_egg ~ Scaled_len + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int +
+              (1|Pop/Season/Pool/Sibship))
+
+bf1_len_nl5 <- bf(Scaled_egg ~ Scaled_len + Season +Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int +
+              (1|Pop/Season/Pool/Sibship))
+
+bf1_null <- bf(Scaled_egg ~ Scaled_len + Season + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+              (1|Pop/Season/Pool/Sibship))
+
+# Fit non-linear effect of baseline tol on plasticity to test whether it fits negative, non-linear curve
+brm_nl_tradelim <- brm(bf1_corr +
+                      bf(Scaled_Q10_trans ~ poly(Scaled_LT50_int,2) + 1) + 
+                      set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = stats::gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE),
+              prior = c(set_prior("normal(0, 1)", 
+                                  class = "b", 
+                                  lb = -Inf, 
+                                  ub = 0,
+                                  resp = "ScaledQ10trans")))
+
+brm_nl_tradelim2 <- brm(bf1_len_nl2 +
+                      bf(Scaled_Q10_trans ~ poly(Scaled_LT50_int,2) + 1) + 
+                      set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = stats::gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE),
+              prior = c(set_prior("normal(0, 1)", 
+                                  class = "b", 
+                                  lb = -Inf, 
+                                  ub = 0,
+                                  resp = "ScaledQ10trans")))
+
+brm_nl_tradelim3 <- brm(bf1_len_nl3 +
+                      bf(Scaled_Q10_trans ~ poly(Scaled_LT50_int,2) + 1) + 
+                      set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = skew_normal(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE),
+              prior = c(set_prior("normal(0, 1)", 
+                                  class = "b", 
+                                  lb = -Inf, 
+                                  ub = 0,
+                                  resp = "ScaledQ10trans")))
+
+brm_nl_tradelim_sk <- brm(bf1_len_nl3 +
+                      bf(Scaled_Q10_trans ~ poly(Scaled_LT50_int,2) + 1) + 
+                      set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = skew_normal(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE),
+              prior = c(set_prior("normal(0, 1)", 
+                                  class = "b", 
+                                  lb = -Inf, 
+                                  ub = 0,
+                                  resp = "ScaledQ10trans")))
+
+brm_nl_tradelim4 <- brm(bf1_len_nl4 +
+                      bf(Scaled_Q10_trans ~ poly(Scaled_LT50_int,2) + 1) + 
+                      set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = stats::gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE),
+              prior = c(set_prior("normal(0, 1)", 
+                                  class = "b", 
+                                  lb = -Inf, 
+                                  ub = 0,
+                                  resp = "ScaledQ10trans")))
+
+brm_nl_tradelim5 <- brm(bf1_len_nl5 +
+                      bf(Scaled_Q10_trans ~ poly(Scaled_LT50_int,2) + 1) + 
+                      set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = stats::gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE),
+              prior = c(set_prior("normal(0, 1)", 
+                                  class = "b", 
+                                  lb = -Inf, 
+                                  ub = 0,
+                                  resp = "ScaledQ10trans")))
+
+brm_nl_trade <- brm(bf1_len_nl3 +
+                      bf(Scaled_Q10_trans ~ 1) + 
+                      set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = skew_normal(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+brm_nl_lim <- brm(bf1_null +
+                      bf(Scaled_Q10_trans ~ poly(Scaled_LT50_int,2) + 1) + 
+                      set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = skew_normal(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE),
+              prior = c(set_prior("normal(0, 1)", 
+                                  class = "b", 
+                                  lb = -Inf, 
+                                  ub = 0,
+                                  resp = "ScaledQ10trans")))
+
+brm_nl_null <- brm(bf1_null +
+                      bf(Scaled_Q10_trans ~ 1) + 
+                      set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = skew_normal(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE))
+
+# Compare likelihoods of models with and without tradeoff and limit effects
+bf_mod <- bf_models(brm_nl_tradelim3,
+                    brm_nl_trade, 
+                    brm_nl_lim,
+                    denominator = brm_nl_null)
+
+bf_mod
+
+pp_check(brm_nl_tradelim_sk, resp = "Scaledegg")
+pp_check(brm_nl_tradelim3, resp = "Scaledegg")
+
+conditional_effects(brm_nl_tradelim)
+
+summary(brm_nl_tradelim3)
+plot(brm_nl_tradelim3)
+
+```
+
+
+```{r}
+
+# Lets try to build a model that has genetic correlation that is able to converge
+bf1_corr <- bf(Scaled_egg ~ Scaled_len + Season + Scaled_LT50 + Scaled_Q10 + 
+                Scaled_LT50:Temp + Scaled_Q10:Temp + 
+            Scaled_Q10:Scaled_LT50_int + Scaled_Q10:Scaled_LT50_int:Temp)
+
+brm_nl_tradelimcorr <- brm(bf1_corr +
+                      bf(Scaled_Q10_trans ~ poly(Scaled_LT50_int,2) + 
+                           (1|p|Pop/Season/Pool/Sibship)) +
+                      bf(Scaled_LT50_int ~ (1|p|Pop/Season/Pool/Sibship)) +
+                      set_rescor(FALSE),
+              data = sel_grad_w_age_len,
+              family = gaussian(),
+              chains = 4,
+              cores = 4,
+              iter = 40000,
+              warmup = 10000,
+              save_pars = save_pars(all = TRUE),
+              prior = c(set_prior("normal(0, 1)", 
+                                  class = "b", 
+                                  lb = -Inf, 
+                                  ub = 0,
+                                  resp = "ScaledQ10trans")))
+
+plot(brm_nl_tradelimcorr)
 
 # Perform as above but for full model
 bf2a_corr <- bf(Scaled_Q10_trans ~ LT50_int_orth_sc + I(LT50_int_orth_sc^2))
@@ -1185,7 +1442,6 @@ bridgesampling::bridge_sampler(brm_corr_full)
 plot(brm_corr_full)
 
 ```
-
 
 Finish Fig S4 w/ plast of generation time plot
 
