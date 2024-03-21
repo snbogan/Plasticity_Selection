@@ -24,6 +24,7 @@ library(lubridate)
 library(data.table)
 library(tibbletime)
 library(mapdata)
+library(ggpubr)
 
 # Read csv describing periods where loggers broke or were aerially exposed
 TidBit_meta_df <- read.csv("~/Documents/GitHub/HotOnes_Tigriopus/Temp_Time_Series/Input_files/TidBit_Deployment_Check_History.csv" )
@@ -245,10 +246,14 @@ site_df <- data.frame(Site = c("BMR", "SC", "RMR", "PTD"),
 Fig_3A <- ggplot() + 
   geom_polygon(data = CA_df, aes(x = long, y = lat, group = group), fill = "gray") +
   geom_point(data = site_df, aes(x = long, y = lat, color = -lat), size = 8) +
-  theme_classic(base_size = 15) +
-  #coord_quickmap() +
+  theme_classic(base_size = 20) +
   scale_color_viridis_c(guide = "none") +
+  theme(legend.background = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent"),
+        strip.background = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent", color = NA)) +
   labs(y = "Latitude (°N)", x = "Longitude (°W)")
+  
 Fig_3A
 
 # Fig 3B
@@ -257,7 +262,11 @@ Fig_3B <- ggplot(data = site_means,
   geom_point(size = 4) +
   geom_errorbar(aes(xmin = Temp - ci, xmax = Temp + ci), 
                 width = 0, size = 0.75) +
-  theme_classic(base_size = 15) +
+  theme_classic(base_size = 20) +
+  theme(legend.background = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent"),
+        strip.background = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent", color = NA)) +
   scale_color_viridis_c(guide = "none") +
   labs(x = "Mean annual temp (°C)", y = "Latitude (°N)")
 
@@ -274,14 +283,18 @@ Fig_3C <- ggplot(data = mean_temps,
   geom_rect(aes(ymax = Inf, ymin = -Inf, 
                 xmin = as.POSIXct("2021-06-17"),
                 xmax = as.POSIXct("2021-08-06")),
-            fill = "gray90", alpha = 0.1, color = NA) +
+            fill = "gray70", alpha = 0.1, color = NA) +
   geom_rect(aes(ymax = Inf, ymin = -Inf, 
                 xmin = as.POSIXct("2021-12-28"),
                 xmax = as.POSIXct("2022-02-16")),
-            fill = "gray90", alpha = 0.1, color = NA) +
+            fill = "gray70", alpha = 0.1, color = NA) +
   geom_point(size = 0.5) +
   facet_grid(Site~.) +
-  theme_classic(base_size = 15, base_rect_size = 0) +
+  theme_classic(base_size = 20, base_rect_size = 0) +
+  theme(legend.background = element_rect(fill = "transparent"),
+        panel.background = element_rect(fill = "transparent"),
+        strip.background = element_rect(fill = "transparent"),
+        plot.background = element_rect(fill = "transparent", color = NA)) +
   scale_color_viridis_c(guide = "none") +
   labs(x = "Date", y = "Mean daily temp (°C)")
 
@@ -289,18 +302,18 @@ Fig_3C
 
 #Arrange and export
 Fig_3 <- ggarrange(Fig_3A, Fig_3B, Fig_3C, 
-                   labels = c("A", "B", "C"),
+                   labels = c("", "", ""),
                    widths = c(1.25, .65,.85),
                    ncol = 3, nrow = 1, align = "hv")
 
 Fig_3
 
 # Export Fig 5 as png
-png("~/Documents/GitHub/HotOnes_Tigriopus/Figures/Fig_3.png", units = "in", width = 12, 
-    height = 6, 
-    res = 600)
-
-Fig_3
+# Export poster fig 2
+ggsave(Fig_3,
+       units = "in", width = 12, height = 6, 
+       filename = "~/Documents/WSN_23_Fig1.png",
+       bg = "transparent")
 
 ```
 

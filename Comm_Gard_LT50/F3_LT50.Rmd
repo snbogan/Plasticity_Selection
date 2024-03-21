@@ -121,7 +121,17 @@ summary(PTD_Season_LL2)
 
 0.162027 / 8.04
 0.083830 / 8.04 
-  
+
+# Calculate sex effect
+Sex_LL2 <- drm(data = All_F3_LT50_df, 
+                    Survival ~ Temp, Sex, 
+                    fct = LL.2(), 
+                    pmodels = list(~1,~Sex, ~Sex, ~1),
+                    type = "binomial")
+
+
+summary(Sex_LL2)
+
 ```
 
 
@@ -893,6 +903,24 @@ Fig_4
 # What is the BCV of baseline LT50 vs its adjusted plasticity?
 sd(sibship_LT50_filt2$Q10_adj) / mean(sibship_LT50_filt2$Q10_adj)
 sd(sibship_LT50_filt2$LT50_lo) / mean(sibship_LT50_filt2$LT50_lo)
+
+# Check posterior intervals
+posterior_interval(adj_brm)
+
+## Pop specific slopes and correlations
+# BMR
+summary(lm(Q10_adj ~ LT50_lo, data = filter(sibship_LT50_filt2[,-c(12,13,14)], Pop == "BMR")))
+
+# SC
+summary(lm(Q10_adj ~ LT50_lo, data = filter(sibship_LT50_filt2[,-c(12,13,14)], Pop == "SC")))
+
+# RMR
+summary(lm(Q10_adj ~ LT50_lo, data = filter(sibship_LT50_filt2[,-c(12,13,14)], Pop == "RMR")))
+
+# PTD
+summary(lm(Q10_adj ~ LT50_lo, data = filter(sibship_LT50_filt2[,-c(12,13,14)], Pop == "PTD")))
+
+
 
 ```
 

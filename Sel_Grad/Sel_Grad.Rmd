@@ -130,8 +130,7 @@ ggsave(Fig_1,
 
 ```
 
-
-Read in and wrangle fecundity, body size, tol, and pl df
+Read in and wrangle fecundity, body size, LT50, and LT50 plasticity
 
 ```{r}
 
@@ -142,19 +141,24 @@ lat_index <- data.frame(Pop = c("BMR", "SC", "RMR", "PTD"),
                                   35.540147,
                                   34.002089))
 
-# Read in df
+# Read in fecundity df's
 Aug_meta_df <- read.csv("Aug_F3_Fecundity.csv")
 Feb_meta_df <- read.csv("Feb_F3_Fecundity.csv")
+
+# Create consistent sibship IDs
 Feb_meta_df$Sib_ID <- gsub("^(.*?)_(.*?)_(.*)$", "\\1_\\2\\3", 
                            Feb_meta_df$Sib_ID)
 
+# Combine df's
 fec_meta_df <- rbind(Aug_meta_df,
                      Feb_meta_df)
 
+# Create season-specific sibships IDs
 fec_meta_df$Sibship <- paste(fec_meta_df$Season,
                             fec_meta_df$Sibship,
                             sep = "_")
 
+# Read in LT50 data set from F3_LT50.rmd
 sibship_LT50_filt <- read.csv(
   "~/Documents/GitHub/HotOnes_Tigriopus/Comm_Gard_LT50/sibship_LT50_filt2.csv")
 
@@ -222,6 +226,18 @@ sel_grad_df <- data.frame(Sib_ID = fec_sum$Sib_ID,
              Egg_count = fec_sum$Egg_count)
 
 ```
+
+How many sibships were derived from replacement cultures following a maternal death?
+
+```{r}
+
+count_ends_with_letter <- sum(str_detect(unique(sibship_LT50_filt$Sibship), "[a-zA-Z]$"))
+
+count_ends_with_letter / nrow(as.data.frame(unique(sibship_LT50_filt$Sibship)))
+
+
+```
+
 
 Fit selection gradient models
 
@@ -515,25 +531,24 @@ summary(lm(Estimate.Scaledegg ~ Scaled_Q10,
 summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
            data = filter(p_sel_grad_df_filt2, quantile == "Low LT50")))
 
-# What was the low temp selection gradient on plasticity?
+# What was the selection gradient on plasticity?
 summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
-           data = filter(p_sel_grad_df_filt2, 
-                           Temp == 16.42)))
+           data = p_sel_grad_df_filt2))
 
-summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
-           data = filter(p_sel_grad_df_filt2, 
-                           Temp == 21.55)))
-
-# What was the low temp selection gradient on LT50?
+# What was the low/hi temp selection gradient on LT50?
 summary(lm(Estimate.Scaledegg ~ Scaled_LT50, 
            data = filter(p_sel_grad_df_filt2, 
                            Temp == 16.42)))
 
+summary(lm(Estimate.Scaledegg ~ Scaled_LT50, 
+           data = filter(p_sel_grad_df_filt2, 
+                           Temp == 21.55)))
+
 # Tolerant low vs high plasticity selection gradient
-0.36939/0.11305
+0.3713/0.16177
 
 #Tolerant vs average plasticity selection gradient
-0.33665/0.16177
+0.3713/0.16177
 
 #Low temp plasticity selection gradient
 summary(lm(Estimate.Scaledegg ~ Scaled_Q10, 
@@ -547,9 +562,32 @@ summary(lm(Estimate.Scaledegg ~ Scaled_Q10,
 summarySE(measurevar = "Egg_count",
           groupvars = c("Temp"),
           data = filter(sel_grad_df_filt, is.na(Egg_count) == FALSE))
+
 21.17244 - 17.92453
 
 ```
+
+Supplemental reports of multivariate selection gradient model
+
+```{r}
+
+# Prob of direction
+post_int <- summary(brm_nl_tradelim3)
+
+print(post_int, digits = 4)
+
+# posterior predictive checks
+pp_check(brm_nl_tradelim3, res = "Scaledegg")
+
+pp_check(brm_nl_tradelim3, res = "ScaledQ10trans")
+
+# Leave one out psis plot
+plot(loo(brm_nl_tradelim3))
+
+plot(brm_nl_tradelim3)
+
+```
+
 
 Mediation analysis
 
@@ -1028,17 +1066,19 @@ corr_df <- unique(data.frame(Scaled_Q10_trans = sel_grad_w_age_len$Scaled_Q10_tr
 # As test, fit model with just random effect and multivariate outcomes pl + tol
 brm_len_corr <- brm(bf_tol + bf_pl + set_rescor(FALSE),
               data = corr_df,
-              family = gaussian(),
+              family = stats::gaussian(),
               chains = 4,
               cores = 4,
-              iter = 40000,
-              warmup = 60000,
+              iter = 50000,
+              warmup = 10000,
               save_pars = save_pars(all = TRUE),
               prior = c(set_prior("normal(0, 1)", 
                                   class = "b", 
                                   lb = -Inf, 
                                   ub = 0,
                                   resp = "ScaledQ10trans")))
+
+plot(brm_len_corr)
 
 brm_len_null <- brm(bf_tol_null + bf_pl_null + set_rescor(FALSE),
               data = corr_df,
@@ -1078,18 +1118,74 @@ se_cov_yz <- sqrt(var(rand_eff_test[, 1]) / nrow(rand_eff_test) * (1 + 2 * cov_p
 se_cov_yz
 
 # Plot
-data_subset <- rand_eff_x[, c("Estimate.ScaledQ10trans_Intercept", "Estimate.ScaledLT50int_Intercept")]
+data_subset <- rand_eff_test[, c("Estimate.ScaledQ10trans_Intercept", "Estimate.ScaledLT50int_Intercept")]
 
-ggplot(data = data_subset, 
+Fig_6B <- ggplot(data = data_subset, 
        aes(y = `Estimate.ScaledQ10trans_Intercept`, 
        x = `Estimate.ScaledLT50int_Intercept`)) +
   geom_point() +
   geom_smooth(method = "lm") +
-  theme_classic() +
-  labs(x = "Basal tolerance breeding value", 
-       y = "Thermal plasticity breeding value")
+  theme_classic(base_size = 20) +
+  labs(y = expression(italic(Z)~"(Q"[10]~"LT"[50]*")"), 
+       x = expression(italic(Z)~"(basal"~"LT"[50]*")"))
 
-# Bootstrap test of negative covariance
+## Bootstrapping test of covariance
+library(boot)
+
+# Define the function to calculate covariance while controlling for VF
+covariance_with_control <- function(data, indices) {
+  subset_data <- data[indices, ]
+  cov(subset_data$`Estimate.ScaledQ10trans_Intercept`, 
+      subset_data$`Estimate.ScaledLT50int_Intercept`)
+}
+
+observed_covariance <- covariance_with_control(data_subset, 1:nrow(data_subset))
+
+# Apply function
+boot_result <- boot(data_subset, 
+                    covariance_with_control, 
+                    R = 10000)
+
+library(ggridges)
+
+Fig_6C <- ggplot(data = rbind(data.frame(t = boot_result$t, ridge = "Poly")),
+       aes(x = t, y = ridge, fill = factor(stat(quantile)))) +
+  geom_vline(xintercept = 0, lty = 2) +
+  stat_density_ridges(
+    geom = "density_ridges_gradient",
+    calc_ecdf = TRUE,
+    quantiles = c(0.025, 0.9725),
+    alpha = 1) + 
+  scale_fill_manual(
+    name = "Probability", values = c("#FF0000A0", "skyblue", "#FF0000A0"),
+    labels = c("<2.5%", "2.5-97.25%", ">97.25%")) +
+  theme_classic(base_size = 20) +
+  theme(legend.position = "none",
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  labs(x = expression(italic(COV)[italic(Z)]), y = "Density")
+ 
+Fig_6C
+
+# Arrange Fig_6 panel
+Fig_6BC <- ggarrange(Fig_6B, Fig_6C, 
+                   labels = c("B", "C"),
+                   heights = c(1, 1),
+                   ncol = 1, nrow = 2, align = "v")
+
+Fig_6BC
+
+Fig_6panel <- ggarrange(Fig6, Fig_6BC, 
+                   labels = c("A", ""),
+                   widths = c(1, 1),
+                   ncol = 2, nrow = 1)
+
+Fig_6panel
+
+ggsave(Fig_6panel,
+       units = "in", width = 12, height = 6, 
+       filename = "~/Documents/GitHub/Plasticity_Selection/Figures/Fig_6panel.png",
+       bg = "white")
 
 ```
 
@@ -1276,6 +1372,8 @@ conditional_effects(brm_nl_tradelim)
 
 summary(brm_nl_tradelim3)
 plot(brm_nl_tradelim3)
+
+posterior_interval(brm_nl_tradelim3)
 
 ```
 
