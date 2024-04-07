@@ -134,6 +134,7 @@ summary(Sex_LL2)
 
 ```
 
+# Estimate LT50 of groups
 
 ```{r}
 
@@ -259,6 +260,8 @@ PTD_M_16.5_All_LL2 <- drm(data = filter(All_F3_LT50_df,
 
 ```
 
+# Export LT50 parameters
+
 ```{r}
 
 # Export LT50 values
@@ -313,6 +316,8 @@ SE = c(BMRF21.5_LT50$`Std. Error`, BMRM21.5_LT50$`Std. Error`,
          PTDF16.5_LT50$`Std. Error`, PTDM16.5_LT50$`Std. Error`))
 
 ```
+
+# Estimate LT50 grouped by season
 
 ```{r}
 
@@ -572,6 +577,7 @@ write.csv(All_LL2_LT50_seas,
 
 ```
 
+# Plot Figure 4A (pop/sex-level LT50)
 
 ```{r}
 
@@ -614,6 +620,8 @@ summary(lm(LT50 ~ Lat, data = All_LL2_LT50_est))
 summary(lm(LT50 ~ Sex, data = All_LL2_LT50_est))
 
 ```
+
+# Calculate LT50 and its plasticity per sibship
 
 ```{r}
 
@@ -923,6 +931,8 @@ summary(lm(Q10_adj ~ LT50_lo, data = filter(sibship_LT50_filt2[,-c(12,13,14)], P
 
 
 ```
+
+# Model QC checks for plasticity predictions
 
 ```{r}
 

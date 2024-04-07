@@ -144,7 +144,6 @@ Feb_offset
 
 ```
 
-
 # Plot filtered temperatures
 
 ```{r}
