@@ -5,15 +5,13 @@ date: "6/23/2021"
 output: github_document
 ---
 
-This is an R Markdown written by Sam Bogan that reads in, wrangles, summarizes, and analyzes time series temperatures collected from n = 3 per site supralittoral splash pools occupied by *Tigriopus californicus* across 4 sites in coastal California (see README). Data were recorded by TidBit MX5000 temperature loggers made by Onset Computer Corp between 2019 - 2021. 
-
 ```{r setup, include=FALSE}
 
 knitr::opts_knit$set(root.dir = '~/Documents/GitHub/HotOnes_Tigriopus/TidBits/')
 
 ```
 
-#Identify measurements to filter out
+# Identify measurements to filter out
 
 ```{r}
 
@@ -45,7 +43,7 @@ date_to_filter_past <- as.Date( filt_post_dates$Date, "%m/%d/%y" )
 
 ```
 
-#Read and wrangle raw data
+# Read and wrangle raw data
 
 ```{r}
 
@@ -147,7 +145,7 @@ Feb_offset
 ```
 
 
-#Plot filtered temperatures
+# Plot filtered temperatures
 
 ```{r}
 
@@ -215,10 +213,11 @@ ggplot( data = mean_temps,
 
 ```
 
+# Plot Fig. 3
+
 ```{r}
 
 #Filter dates
-
 mean_temps$Site = factor(
   mean_temps$Site,
   levels=c("BMR", "SC", "RMR",  "PTD"))
